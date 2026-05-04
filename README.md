@@ -107,14 +107,8 @@ python build_vuhledar_terrain.py
 
 AOI나 격자 크기를 바꿔 실행할 수도 있습니다.
 
-```powershell
-python build_vuhledar_terrain.py `
-  --south 47.64 `
-  --west 37.05 `
-  --north 47.92 `
-  --east 37.45 `
-  --cell-size 50 ` (미터 단위)
-  --output-dir outputs
+'''
+python build_vuhledar_terrain.py  --south 47.64  --west 37.05  --north 47.92  --east 37.45  --cell-size 50 --output-dir outputs
 ```
 
 DEM 파일을 직접 지정하려면:
@@ -137,11 +131,3 @@ python build_vuhledar_terrain.py --dem-path C:\path\to\dem.tif
 - `outputs/`: PNG/HTML 지도와 검증 리포트
 
 이 출력물들은 용량이 커질 수 있어 루트 `.gitignore`에서 기본적으로 제외했습니다.
-
-## Git 업로드 참고
-
-- 가상환경(`.venv`), 캐시, `__pycache__`, 실행 결과물은 Git에 올리지 않는 것을 권장합니다.
-- `vuhledar_terrain_project/data_processed/terrain_grid_50m.gpkg`처럼 100MB를 넘는 파일은 일반 GitHub push가 실패할 수 있습니다.
-- 대용량 데이터나 결과 영상까지 공유해야 한다면 Git LFS, Release artifact, 외부 스토리지 중 하나를 사용하는 편이 좋습니다.
-- 현재 `war-game-modeling/` 안에는 별도 `.git` 폴더가 있습니다. 루트 `wargame` 저장소 하나로 합쳐 올릴 계획이라면 내부 저장소를 유지할지, 제거하고 일반 폴더로 올릴지 먼저 정리해야 합니다.
-

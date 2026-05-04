@@ -54,6 +54,8 @@ python .\build_vuhledar_terrain.py `
   --output-dir outputs
 ```
 
+30m 격자가 필요하면 `--cell-size 30`으로 실행합니다. 이 경우 `terrain_grid_30m.gpkg`, `terrain_grid_30m.csv`, `vuhledar_static_map_30m.png`, `vuhledar_terrain_classification_map_30m.png`처럼 cell size가 붙은 파일이 별도로 생성됩니다.
+
 ## 생성되는 폴더
 
 - `data_raw/`: OSM 원천 레이어와 자동 다운로드 DEM 타일 저장
@@ -104,6 +106,8 @@ DEM에 CRS가 반드시 정의되어 있어야 합니다.
 
 - `data_processed/terrain_grid_50m.gpkg`: 50m 지형 격자 GeoPackage
 - `data_processed/terrain_grid_50m.csv`: 50m 지형 격자 CSV, geometry는 WKT
+- `data_processed/terrain_grid_30m.gpkg`: 30m로 실행했을 때 생성되는 지형 격자 GeoPackage
+- `data_processed/terrain_grid_30m.csv`: 30m로 실행했을 때 생성되는 지형 격자 CSV
 - `outputs/vuhledar_osm_layers_map.html`: OSM 레이어 인터랙티브 지도
 - `outputs/vuhledar_terrain_grid_map.html`: 지형 격자 인터랙티브 지도
 - `outputs/vuhledar_static_map.png`: 정적 지형 지도

@@ -1,0 +1,55 @@
+
+max_time: 360
+
+# Video settings
+video:
+  enabled: true
+  output_path: "results/simulation.mp4"
+  fps: 10
+
+distance_rescale: 1
+
+initial_positions:
+  RED:
+    ARTILLERY: [[50,370],[50,425],[75,420],[150,440],[75,440],[100,425]]
+    DRONE: [[450,350]]
+    TANK: [[400,350],[350,350],[300,270],[290,260]]
+    ANTI_TANK: [[350,250],[350,250],[400,300],[400,300],[475,220],[515,250]]
+    RIFLE: [
+      [325,275],[300,240],[310,250],[350,300],[360,330],[370,320],[355,280],[300,300],
+    [400,300],[380,300],[390,300],[415,315],[420,320],[390,330],[370,290],[380,310],
+    [525,210],[515,230],[535,200],[500,220],[480,220],[490,210],[490,210],[500,220]
+    ]
+    COMMAND_POST: [[350,300]]
+  BLUE:
+    ARTILLERY: [[750,350],[700,357],[750,400],[720,410],[670,380],[635,425]]
+    DRONE: [[300,425]]
+    TANK: [[700,70],[715,120],[670,90],[730,95]]
+    ANTI_TANK: [[450,75],[475,95],[650,155],[645,150],[655,185],[650,185]]
+    RIFLE: [
+      [465,55],[470,65],[455,80],[470,75],[430,60],[430,70],[455,65],[460,75],
+
+      [630,210],[650,210],[660,190],[660,180],[660,200],[640,170],[640,190],[630,200],
+      [650,170],[660,180],[670,170],[640,150],[630,160],[630,160],[640,170],[650,180]
+    ]
+    COMMAND_POST: [[670,175]]
+
+num_artillery_red: 6
+num_artillery_blue: 6
+num_drone_red: 1
+num_drone_blue: 1
+num_tank_red: 4
+num_tank_blue: 4
+num_at_red: 6
+num_at_blue: 6
+num_infantry_red: 24
+num_infantry_blue: 24
+num_cp_red: 1
+num_cp_blue: 1
+
+# Simulation Settings
+simulation:
+  pixel_to_meter_scale: 5.0  # 1 pixel = 5 meters
+  lethal_radius: 30.0  # Artillery lethal radius in meters
+  mountain_detect_prob: 0.2  # Detection probability in mountain terrain
+  drone_elevation: 200.0  # Drone elevation in meters
