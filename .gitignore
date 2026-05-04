@@ -1,0 +1,30 @@
+# Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Terrain builder generated data
+vuhledar_terrain_project/cache/
+vuhledar_terrain_project/data_raw/
+vuhledar_terrain_project/data_processed/
+vuhledar_terrain_project/outputs/
+
+# War-game simulation generated artifacts
+war-game-modeling/.tile_cache/
+war-game-modeling/frames/
+war-game-modeling/results/
+    
