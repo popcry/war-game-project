@@ -202,7 +202,8 @@ class Fire:
         distance = calculate_distance(attacker, target)
         
         # 곡사화기인 경우 다른 방식으로 처리
-        if attacker.unit_type == UnitType.ARTILLERY:
+        # 자폭 드론도 곡사화기와 유사하게 처리 (탄착지점 계산 및 주변 유닛 피해 적용)
+        if attacker.unit_type == UnitType.ARTILLERY or attacker.unit_type == UnitType.SELF_DEST_DRONE:
             # 탄착지점 계산
             impact_point = self.calculate_impact_point(target.position, distance)
             
@@ -213,7 +214,8 @@ class Fire:
             for unit in all_units:
                 if (unit.team == attacker.team 
                     and unit.status.value in ["ALIVE", "M_KILL", "MINOR"]
-                    and unit.unit_type != UnitType.DRONE):  # 드론 제외
+                    and unit.unit_type != UnitType.DRONE
+                    and unit.unit_type != UnitType.SELF_DEST_DRONE):  # 드론 제외
                     unit_distance = calculate_point_distance(impact_point, unit.position)
                     if unit_distance <= lethal_radius:
                         friendly_units_in_radius.append(unit)
@@ -226,7 +228,17 @@ class Fire:
             # 탄착지점 주변의 모든 유닛에 대한 피해 적용
             self.apply_artillery_damage(impact_point, all_units, current_time)
             attacker.update_action(Action.STOP)  # 사격 완료 후 STOP으로 변경
+            
+            if attacker.unit_type == UnitType.SELF_DEST_DRONE:
+                # 자폭 드론은 사격과 동시에 자신도 피해를 입음
+                self.apply_artillery_damage(attacker.position, all_units, current_time)
+                attacker.update_status(Status.K_KILL)  # 자폭 드론은 사격 후 즉시 파괴 처리
+                attacker.update_action(Action.STOP)
+                return None
+            
             return None
+        
+        
         
         # 직사화기 처리 (기존 코드)
         """

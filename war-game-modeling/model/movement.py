@@ -23,7 +23,8 @@ class Movement:
         UnitType.TANK: 13/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
         UnitType.ARTILLERY: 0 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
         UnitType.DRONE: 25/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
-        UnitType.COMMAND_POST: 5/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30
+        UnitType.COMMAND_POST: 5/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
+        UnitType.SELF_DEST_DRONE: 25/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30 # 자폭 드론 속도는 일반 드론과 동일
     }
      
     # 드론 탐지 패턴 정의

@@ -97,6 +97,7 @@ class Simulation:
         create_units_for_team(Team.RED, UnitType.ANTI_TANK, self.config['initial_positions']['RED']['ANTI_TANK'], self.config['num_at_red'])
         create_units_for_team(Team.RED, UnitType.RIFLE, self.config['initial_positions']['RED']['RIFLE'], self.config['num_infantry_red'])
         create_units_for_team(Team.RED, UnitType.COMMAND_POST, self.config['initial_positions']['RED']['COMMAND_POST'], self.config['num_cp_red'])
+        create_units_for_team(Team.RED, UnitType.SELF_DEST_DRONE, self.config['initial_positions']['RED']['SELF_DEST_DRONE'], self.config['num_self_dest_drone_red']) # 자폭 드론 추가
         
         # BLUE 팀 유닛 생성
         create_units_for_team(Team.BLUE, UnitType.ARTILLERY, self.config['initial_positions']['BLUE']['ARTILLERY'], self.config['num_artillery_blue'])
@@ -105,7 +106,7 @@ class Simulation:
         create_units_for_team(Team.BLUE, UnitType.ANTI_TANK, self.config['initial_positions']['BLUE']['ANTI_TANK'], self.config['num_at_blue'])
         create_units_for_team(Team.BLUE, UnitType.RIFLE, self.config['initial_positions']['BLUE']['RIFLE'], self.config['num_infantry_blue'])
         create_units_for_team(Team.BLUE, UnitType.COMMAND_POST, self.config['initial_positions']['BLUE']['COMMAND_POST'], self.config['num_cp_blue'])
-
+        create_units_for_team(Team.BLUE, UnitType.SELF_DEST_DRONE, self.config['initial_positions']['BLUE']['SELF_DEST_DRONE'], self.config['num_self_dest_drone_blue']) # 자폭 드론 추가
     def _get_command_for_team(self, team: Team) -> Command:
         """팀에 대한 명령 반환"""
         return self.commands[team]
