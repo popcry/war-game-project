@@ -59,7 +59,12 @@ class Detect:
         distance = calculate_distance(observer, target)
         
         # 2. 탐지 거리 확인 (픽셀 단위)
-        detect_range = observer.detect_range * target.detectability
+        target_terrain = self.terrain.get_terrain_type((int(target.position[0]), int(target.position[1])))
+        detect_range = (
+            observer.detect_range
+            * target.detectability
+            * self.terrain.get_visibility_multiplier(target.position)
+        )
         if distance > detect_range:
             return False
         
@@ -68,8 +73,6 @@ class Detect:
             return False
         
         # 4. 지형에 따른 탐지 확률 적용
-        target_terrain = self.terrain.get_terrain_type((int(target.position[0]), int(target.position[1])))
-        
         if target_terrain == 'mountain':
             detect_prob = self.MOUNTAIN_DETECT_PROB
             if random.random() > detect_prob:

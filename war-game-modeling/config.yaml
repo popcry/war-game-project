@@ -53,3 +53,45 @@ simulation:
   lethal_radius: 30.0  # Artillery lethal radius in meters
   mountain_detect_prob: 0.2  # Detection probability in mountain terrain
   drone_elevation: 200.0  # Drone elevation in meters
+
+# Terrain layer settings
+# Layer priority in model/terrain.py:
+# river -> trench -> road -> mountain -> normal
+terrain:
+  source: "vuhledar_layers"
+  elevation_file: "database/vuhledar_elevation.csv"
+  river_mask_file: "database/vuhledar_river_mask.csv"
+  road_type_file: "database/vuhledar_road_type.csv"
+  trench_mask_file: "database/vuhledar_trench_mask.csv"
+  trench_labels: [1, "1", "trench", "true", "t"]
+
+  # Mountain/normal classification uses the top 25% of DEM elevation.
+  mountain_elevation_quantile: 0.75
+
+  mobility:
+    normal: 1.0
+    mountain: 0.8
+    river: 0.2
+    road: 1.15
+    trench: 0.7
+
+  visibility:
+    normal: 1.0
+    mountain: 0.8
+    river: 1.0
+    road: 1.0
+    trench: 0.5
+
+  hit_probability:
+    normal: 1.0
+    mountain: 0.9
+    river: 1.0
+    road: 1.0
+    trench: 0.6
+
+  damage_probability:
+    normal: 1.0
+    mountain: 0.9
+    river: 1.0
+    road: 1.0
+    trench: 0.6

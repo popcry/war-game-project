@@ -96,6 +96,7 @@ python simulation.py --time-scale 2.0 --sim_speed 1.0 --detection T --eligible_T
 - `--eligible_TL`: 사격 가능 표적선 표시 여부 (`T` 또는 `F`)
 - `--fire`: 사격선 표시 여부 (`T` 또는 `F`)
 
+
 시뮬레이션 세부 값은 `war-game-modeling/config.yaml`에서 조정합니다.
 
 ### Vuhledar 지형 데이터 생성

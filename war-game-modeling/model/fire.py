@@ -79,7 +79,10 @@ class Fire:
                 
                 if distance <= lethal_radius:
                     # 피해확률 계산
-                    damage_prob = self.calculate_damage_probability(distance, lethal_radius)
+                    damage_prob = (
+                        self.calculate_damage_probability(distance, lethal_radius)
+                        * self.terrain.get_damage_probability_multiplier(unit.position)
+                    )
                     
                     # 피해 적용 여부 결정
                     if random.random() <= damage_prob:
@@ -145,10 +148,10 @@ class Fire:
             - DM: 차폐 이동
         """
         terrain_type = self.terrain.get_terrain_type(target.position)
-        is_mountain = terrain_type == 'mountain'
+        is_protected_terrain = terrain_type in ['mountain', 'trench']
         is_moving = target.action == Action.MOVE
 
-        if is_mountain:
+        if is_protected_terrain:
             return "DS" if not is_moving else "DM"
         else:
             return "ES" if not is_moving else "EM"
@@ -241,7 +244,10 @@ class Fire:
             - 소총·대전차·지휘관: 치명상(Fatal)이면 “무력화 성공”
         """
         protection_state = self.get_protection_state(target)
-        hit_prob = ProbabilitySystem.get_hit_probability(attacker.unit_type, target.unit_type, distance, protection_state)
+        hit_prob = (
+            ProbabilitySystem.get_hit_probability(attacker.unit_type, target.unit_type, distance, protection_state)
+            * self.terrain.get_hit_probability_multiplier(target.position)
+        )
         
         hit_success = random.random() <= hit_prob
 
