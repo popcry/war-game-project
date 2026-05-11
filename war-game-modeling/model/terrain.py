@@ -46,7 +46,7 @@ class Terrain:
     def get_terrain_decay_rate(self, unit: Unit, position: Tuple[int, int]) -> float:
         """유닛의 지형에 따른 이동속도 감소율 반환"""
         # 드론은 지형 영향을 받지 않음
-        if unit.unit_type == UnitType.DRONE:
+        if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
             return 1.0
             
         terrain_type = self.get_terrain_type(position)
