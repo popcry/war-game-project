@@ -126,7 +126,7 @@ class Simulation:
             # 이동 이벤트 스케줄링
             if unit.can_move():
                 # 드론은 TAI로 이동, 다른 유닛은 maneuver_objective가 있을 때만 이동
-                if unit.unit_type == UnitType.DRONE or command.maneuver_objective is not None:
+                if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE] or command.maneuver_objective is not None:
                     event = self.movement.move(unit, command, self.current_time, self.units)
                     if event:
                         heapq.heappush(self.events, event)
@@ -242,7 +242,7 @@ class Simulation:
                         move_event = self.movement.move(unit, command, self.current_time, self.units)
                     if move_event:
                         heapq.heappush(self.events, move_event)
-                elif unit.action != Action.FIRE and unit.objective:
+                elif unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE] or unit.action != Action.FIRE and unit.objective:
                     move_event = self.movement.move(unit, command, self.current_time, self.units)
                     if move_event:
                         heapq.heappush(self.events, move_event)

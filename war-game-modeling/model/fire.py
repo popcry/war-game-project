@@ -194,6 +194,10 @@ class Fire:
     def fire(self, attacker: Unit, target: Unit, all_units: List[Unit], command: Command, current_time: float) -> Optional[Event]:
         """유닛의 사격 처리"""
         # 표적이 여전히 존재하고 사격 가능한 상태인지 확인
+        if not attacker.can_fire():
+            attacker.update_action(Action.STOP)
+            return None
+        
         if attacker.unit_type != UnitType.ARTILLERY:
             if not target or target.status not in [Status.ALIVE, Status.M_KILL, Status.MINOR]:
                 attacker.update_action(Action.STOP)
@@ -231,7 +235,6 @@ class Fire:
             
             if attacker.unit_type == UnitType.SELF_DEST_DRONE:
                 # 자폭 드론은 사격과 동시에 자신도 피해를 입음
-                self.apply_artillery_damage(attacker.position, all_units, current_time)
                 attacker.update_status(Status.K_KILL)  # 자폭 드론은 사격 후 즉시 파괴 처리
                 attacker.update_action(Action.STOP)
                 return None

@@ -22,7 +22,7 @@ class Detect:
         x2, y2 = target.position
         
         # 드론의 경우 고도를 설정값으로 고정하고 픽셀로 변환
-        if observer.unit_type == UnitType.DRONE:
+        if observer.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
             observer_elevation = config['simulation']['drone_elevation'] / PIXEL_TO_METER_SCALE  # 미터를 픽셀로 변환
         else:
             # 지형의 고도는 이미 픽셀 단위
@@ -101,7 +101,7 @@ class Detect:
             # 드론의 표적 정보 수집
             drone_targets = set()
             for unit in all_units:
-                if unit.team == team and unit.unit_type == UnitType.DRONE:
+                if unit.team == team and unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
                     drone_targets.update(unit.target_list)
             
             # 드론의 표적 정보를 포병에게만 전달
