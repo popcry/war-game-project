@@ -74,7 +74,8 @@ class Fire:
         # 치사반경 내의 모든 유닛에 대해 피해 적용
         for unit in all_units:
             if (unit.status.value in ["ALIVE", "M_KILL", "MINOR"] and  # 살아있는 유닛만 처리
-                unit.unit_type != UnitType.DRONE):  # 드론은 제외
+                unit.unit_type != UnitType.DRONE and
+                unit.unit_type != UnitType.WATCH_TOWER):  # 드론은 제외
                 distance = calculate_point_distance(impact_point, unit.position)
                 
                 if distance <= lethal_radius:
@@ -121,6 +122,9 @@ class Fire:
             if target:
                 # 
                 if target.status in [Status.ALIVE, Status.M_KILL, Status.MINOR]:
+                    if target.unit_type == UnitType.WATCH_TOWER:
+                        continue
+
                     # Rifle은 전차를 공격할 수 없음
                     if unit.unit_type == UnitType.RIFLE and target.unit_type == UnitType.TANK:
                         continue
@@ -197,6 +201,10 @@ class Fire:
         if not attacker.can_fire():
             attacker.update_action(Action.STOP)
             return None
+
+        if target and target.unit_type == UnitType.WATCH_TOWER:
+            attacker.update_action(Action.STOP)
+            return None
         
         if attacker.unit_type != UnitType.ARTILLERY:
             if not target or target.status not in [Status.ALIVE, Status.M_KILL, Status.MINOR]:
@@ -219,7 +227,8 @@ class Fire:
                 if (unit.team == attacker.team 
                     and unit.status.value in ["ALIVE", "M_KILL", "MINOR"]
                     and unit.unit_type != UnitType.DRONE
-                    and unit.unit_type != UnitType.SELF_DEST_DRONE):  # 드론 제외
+                    and unit.unit_type != UnitType.SELF_DEST_DRONE
+                    and unit.unit_type != UnitType.WATCH_TOWER):  # 드론 제외
                     unit_distance = calculate_point_distance(impact_point, unit.position)
                     if unit_distance <= lethal_radius:
                         friendly_units_in_radius.append(unit)
