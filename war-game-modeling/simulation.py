@@ -12,6 +12,32 @@ from model.command import Command, Phase
 import heapq
 import argparse
 import os
+import shutil
+import stat
+
+
+def _remove_readonly(func, path, exc_info):
+    """Clear Windows read-only bits and retry a failed remove operation."""
+    os.chmod(path, stat.S_IWRITE | stat.S_IREAD | stat.S_IEXEC)
+    func(path)
+
+
+def _reset_directory(path: str) -> None:
+    """Remove and recreate a directory, including read-only Windows folders."""
+    if os.path.isdir(path):
+        shutil.rmtree(path, onerror=_remove_readonly)
+    elif os.path.exists(path):
+        os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+        os.remove(path)
+    os.makedirs(path, exist_ok=True)
+
+
+def _safe_rmtree(path: str) -> None:
+    """Best-effort recursive delete for generated output directories."""
+    if os.path.exists(path):
+        shutil.rmtree(path, onerror=_remove_readonly)
+
+
 class Simulation:
     def __init__(self, config_file: str, time_scale: float = 1.0, sim_speed: float = 1.0, 
                  show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False):
@@ -167,10 +193,7 @@ class Simulation:
 
         # 프레임 디렉토리 초기화
         if self.record_video:
-            import shutil
-            if os.path.exists(self.visualizer.frame_dir):
-                shutil.rmtree(self.visualizer.frame_dir)
-            os.makedirs(self.visualizer.frame_dir)
+            _reset_directory(self.visualizer.frame_dir)
 
 
         while self.current_time < max_time:
@@ -268,8 +291,7 @@ class Simulation:
             print("Simulation ended, creating video...")
             self.visualizer.create_video(self.output_path, self.video_fps)
             # 비디오 생성 후 프레임 디렉토리 정리
-            if os.path.exists(self.visualizer.frame_dir):
-                shutil.rmtree(self.visualizer.frame_dir)
+            _safe_rmtree(self.visualizer.frame_dir)
         
         # 창 유지
         while True:

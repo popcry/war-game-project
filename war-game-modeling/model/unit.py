@@ -91,7 +91,7 @@ class Unit:
             UnitType.ANTI_TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,
             UnitType.TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,     
             UnitType.ARTILLERY: 1000 / 5 / PIXEL_TO_METER_SCALE,
-            UnitType.DRONE: 500 / 5 / PIXEL_TO_METER_SCALE,    
+            UnitType.DRONE: 2000 / 5 / PIXEL_TO_METER_SCALE,    
             UnitType.COMMAND_POST: 1000 / 5 / PIXEL_TO_METER_SCALE
         }[self.unit_type]
 
