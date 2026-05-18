@@ -56,9 +56,6 @@ class Detect:
     def detect_target(self, observer: Unit, target: Unit) -> bool:
         """적 유닛 탐지"""
         # 1. 거리 계산 (픽셀단위)
-        if target.unit_type == UnitType.WATCH_TOWER:
-            return False
-
         distance = calculate_distance(observer, target)
         
         # 2. 탐지 거리 확인 (픽셀 단위)

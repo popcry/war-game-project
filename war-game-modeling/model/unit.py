@@ -38,7 +38,6 @@ class UnitType(Enum):
     DRONE = "DRONE"
     COMMAND_POST = "COMMAND_POST"
     SELF_DEST_DRONE = "SELF_DEST_DRONE"
-    WATCH_TOWER = "WATCH_TOWER"
 
 class Action(Enum):
     FIRE = "FIRE"
@@ -97,7 +96,6 @@ class Unit:
             UnitType.ARTILLERY: 1000 / 5 / PIXEL_TO_METER_SCALE,
             UnitType.DRONE: 500 / 5 / PIXEL_TO_METER_SCALE,    
             UnitType.COMMAND_POST: 1000 / 5 / PIXEL_TO_METER_SCALE,
-            UnitType.WATCH_TOWER: 8000 / 5 / PIXEL_TO_METER_SCALE,
             UnitType.SELF_DEST_DRONE: 500 / 5 / PIXEL_TO_METER_SCALE # 자폭 드론도 일반 드론과 동일한 탐지 범위를 가짐
         }[self.unit_type]
 
@@ -108,7 +106,6 @@ class Unit:
             UnitType.ARTILLERY: 2,
             UnitType.DRONE: 0,    
             UnitType.COMMAND_POST: 1.0,
-            UnitType.WATCH_TOWER: 0,
             UnitType.SELF_DEST_DRONE: 0  # 자폭 드론은 탐지 불가
         }[self.unit_type]
 
@@ -119,14 +116,11 @@ class Unit:
             UnitType.ARTILLERY: 11300 / 1 / PIXEL_TO_METER_SCALE,  
             UnitType.DRONE: 0,      
             UnitType.COMMAND_POST: 400 / 5 / PIXEL_TO_METER_SCALE, 
-            UnitType.WATCH_TOWER: 0,
             UnitType.SELF_DEST_DRONE: 400 / 5 / PIXEL_TO_METER_SCALE # 자폭 드론은 일반 보병과 동일한 사격 범위를 가짐, 추후 조정 필요
         }[self.unit_type]
 
     def can_move(self) -> bool:
         """이동 가능 여부 확인"""
-        if self.unit_type == UnitType.WATCH_TOWER:
-            return False
         if self.unit_type in [UnitType.RIFLE, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
             return self.status not in [Status.SERIOUS, Status.CRITICAL, Status.FATAL]
         else:
@@ -134,8 +128,6 @@ class Unit:
 
     def can_fire(self) -> bool:
         """사격 가능 여부 확인"""
-        if self.unit_type == UnitType.WATCH_TOWER:
-            return False
         return self.status in [Status.MINOR,Status.ALIVE, Status.M_KILL]
 
     def update_position(self, new_position: Tuple[float, float]) -> None:

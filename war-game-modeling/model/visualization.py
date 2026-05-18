@@ -98,7 +98,6 @@ class Visualizer:
             UnitType.ARTILLERY: "A",
             UnitType.DRONE: "D",
             UnitType.COMMAND_POST: "CP",
-            UnitType.WATCH_TOWER: "WT",
             UnitType.SELF_DEST_DRONE: "SD"
         }
         

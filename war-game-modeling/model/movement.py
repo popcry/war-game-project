@@ -7,7 +7,6 @@ from model.detect import Detect
 from model.function import calculate_distance, calculate_point_distance
 import random
 import math
-import heapq
 import yaml 
 
 with open('config.yaml', 'r') as f:
@@ -25,7 +24,6 @@ class Movement:
         UnitType.ARTILLERY: 0 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
         UnitType.DRONE: 25/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
         UnitType.COMMAND_POST: 5/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
-        UnitType.WATCH_TOWER: 0,
         UnitType.SELF_DEST_DRONE: 25/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30 # 자폭 드론 속도는 일반 드론과 동일
     }
      
@@ -50,148 +48,8 @@ class Movement:
         decay_rate = self.terrain.get_terrain_decay_rate(unit, (int(position[0]), int(position[1])))
         return base_speed * decay_rate
 
-    def _is_in_bounds(self, position: Tuple[int, int]) -> bool:
-        x, y = position
-        height, width = self.terrain.dem_data.shape
-        return 0 <= x < width and 0 <= y < height
-
-    def _is_tank_passable(self, position: Tuple[int, int]) -> bool:
-        return (
-            self._is_in_bounds(position)
-            and self.terrain.get_terrain_type(position) == 'normal'
-        )
-
-    def _get_tank_neighbors(self, position: Tuple[int, int]) -> List[Tuple[Tuple[int, int], float]]:
-        x, y = position
-        neighbors = []
-        directions = [
-            (-1, 0), (1, 0), (0, -1), (0, 1),
-            (-1, -1), (-1, 1), (1, -1), (1, 1)
-        ]
-
-        for dx, dy in directions:
-            next_position = (x + dx, y + dy)
-            if not self._is_tank_passable(next_position):
-                continue
-
-            if dx != 0 and dy != 0:
-                if not (
-                    self._is_tank_passable((x + dx, y))
-                    and self._is_tank_passable((x, y + dy))
-                ):
-                    continue
-                move_cost = math.sqrt(2)
-            else:
-                move_cost = 1.0
-
-            neighbors.append((next_position, move_cost))
-
-        return neighbors
-
-    def _find_nearest_tank_passable(self, position: Tuple[int, int], max_radius: int = 100) -> Optional[Tuple[int, int]]:
-        x, y = position
-        if self._is_tank_passable((x, y)):
-            return (x, y)
-
-        for radius in range(1, max_radius + 1):
-            candidates = []
-            for dx in range(-radius, radius + 1):
-                candidates.append((x + dx, y - radius))
-                candidates.append((x + dx, y + radius))
-            for dy in range(-radius + 1, radius):
-                candidates.append((x - radius, y + dy))
-                candidates.append((x + radius, y + dy))
-
-            passable = [candidate for candidate in candidates if self._is_tank_passable(candidate)]
-            if passable:
-                return min(passable, key=lambda candidate: calculate_point_distance(position, candidate))
-
-        return None
-
-    def _find_tank_path(self, start: Tuple[int, int], goal: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
-        if not self._is_in_bounds(start):
-            return None
-
-        goal = self._find_nearest_tank_passable(goal)
-        if goal is None:
-            return None
-        if start == goal:
-            return [start]
-
-        open_set = [(0.0, start)]
-        came_from = {}
-        g_score = {start: 0.0}
-        closed = set()
-
-        while open_set:
-            _, current = heapq.heappop(open_set)
-            if current in closed:
-                continue
-            if current == goal:
-                path = [current]
-                while current in came_from:
-                    current = came_from[current]
-                    path.append(current)
-                path.reverse()
-                return path
-
-            closed.add(current)
-            for neighbor, move_cost in self._get_tank_neighbors(current):
-                if neighbor in closed:
-                    continue
-
-                tentative_g_score = g_score[current] + move_cost
-                if tentative_g_score >= g_score.get(neighbor, float('inf')):
-                    continue
-
-                came_from[neighbor] = current
-                g_score[neighbor] = tentative_g_score
-                f_score = tentative_g_score + calculate_point_distance(neighbor, goal)
-                heapq.heappush(open_set, (f_score, neighbor))
-
-        return None
-
-    def _calculate_tank_next_position(self, unit: Unit, speed: float) -> Optional[Tuple[float, float]]:
-        if not unit.objective or speed <= 0:
-            return None
-
-        start = (int(round(unit.position[0])), int(round(unit.position[1])))
-        goal = (int(round(unit.objective[0])), int(round(unit.objective[1])))
-        path = self._find_tank_path(start, goal)
-        if not path or len(path) == 1:
-            return None
-
-        remaining_distance = speed
-        current_position = (float(unit.position[0]), float(unit.position[1]))
-
-        for waypoint in path[1:]:
-            waypoint_position = (float(waypoint[0]), float(waypoint[1]))
-            segment_distance = calculate_point_distance(current_position, waypoint_position)
-            if segment_distance == 0:
-                current_position = waypoint_position
-                continue
-
-            if remaining_distance >= segment_distance:
-                current_position = waypoint_position
-                remaining_distance -= segment_distance
-                continue
-
-            ratio = remaining_distance / segment_distance
-            next_position = (
-                current_position[0] + (waypoint_position[0] - current_position[0]) * ratio,
-                current_position[1] + (waypoint_position[1] - current_position[1]) * ratio
-            )
-            next_cell = (int(next_position[0]), int(next_position[1]))
-            if self._is_tank_passable(next_cell):
-                return next_position
-            return waypoint_position
-
-        return current_position
-
     def can_move(self, unit: Unit) -> bool:
         """이동 가능 여부 확인"""
-        if unit.unit_type == UnitType.WATCH_TOWER:
-            return False
         return unit.status in [Status.ALIVE, Status.F_KILL, Status.MINOR, Status.SERIOUS]
 
     def calculate_drone_objective(self, unit: Unit, command: Command, current_time: float) -> Tuple[float, float]:
@@ -309,20 +167,6 @@ class Movement:
                 unit.update_action(Action.STOP)
                 unit.update_objective(None)
                 return None
-
-        if unit.unit_type == UnitType.TANK:
-            speed = self.get_unit_speed(unit, unit.position)
-            next_position = self._calculate_tank_next_position(unit, speed)
-            if not next_position:
-                unit.update_action(Action.STOP)
-                return None
-
-            return Event(
-                event_type=EventType.MOVE,
-                time=current_time + 1.0,
-                source_id=unit.id,
-                position=next_position
-            )
 
         # 정규화된 방향 벡터
         if distance > 0:
