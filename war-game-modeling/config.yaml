@@ -21,6 +21,8 @@ initial_positions:
     [525,210],[515,230],[535,200],[500,220],[480,220],[490,210],[490,210],[500,220]
     ]
     COMMAND_POST: [[350,300]]
+    SELF_DEST_DRONE: [[450,350]]
+
   BLUE:
     ARTILLERY: [[750,350],[700,357],[750,400],[720,410],[670,380],[635,425]]
     DRONE: [[300,425]]
@@ -33,6 +35,7 @@ initial_positions:
       [650,170],[660,180],[670,170],[640,150],[630,160],[630,160],[640,170],[650,180]
     ]
     COMMAND_POST: [[670,175]]
+    SELF_DEST_DRONE: [[300,425]]
 
 num_artillery_red: 6
 num_artillery_blue: 6
@@ -46,6 +49,9 @@ num_infantry_red: 24
 num_infantry_blue: 24
 num_cp_red: 1
 num_cp_blue: 1
+num_self_dest_drone_red: 1
+num_self_dest_drone_blue: 1
+
 
 # Simulation Settings
 simulation:

@@ -36,6 +36,7 @@ class UnitType(Enum):
     TANK = "TANK"
     ARTILLERY = "ARTILLERY"
     DRONE = "DRONE"
+    SELF_DEST_DRONE = "SELF_DEST_DRONE"
     COMMAND_POST = "COMMAND_POST"
 
 class Action(Enum):
@@ -64,6 +65,8 @@ class Unit:
             return random.triangular(5.0, 10.0, 6.0)  # k-2전차 평균 분당 10발 (장전 6초)
         elif self.unit_type == UnitType.ANTI_TANK:
             return random.triangular(60.0, 180.0, 100.0)  # 현궁 급속사격 장전 1분, 정상사격 3분
+        elif self.unit_type == UnitType.SELF_DEST_DRONE:
+            return random.uniform(0.5, 1.0)  # 자폭 드론은 빠르게 폭발
         else:  # RIFLE, COMMAND_POST
             return random.uniform(2.0, 3.0)
 
@@ -92,7 +95,8 @@ class Unit:
             UnitType.TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,     
             UnitType.ARTILLERY: 1000 / 5 / PIXEL_TO_METER_SCALE,
             UnitType.DRONE: 2000 / 5 / PIXEL_TO_METER_SCALE,    
-            UnitType.COMMAND_POST: 1000 / 5 / PIXEL_TO_METER_SCALE
+            UnitType.COMMAND_POST: 1000 / 5 / PIXEL_TO_METER_SCALE,
+            UnitType.SELF_DEST_DRONE: 2000 / 5 / PIXEL_TO_METER_SCALE
         }[self.unit_type]
 
         self.detectability = {
@@ -101,7 +105,8 @@ class Unit:
             UnitType.TANK: 2.0,     
             UnitType.ARTILLERY: 2,
             UnitType.DRONE: 0,    
-            UnitType.COMMAND_POST: 1.0
+            UnitType.COMMAND_POST: 1.0,
+            UnitType.SELF_DEST_DRONE: 0
         }[self.unit_type]
 
         self.weapon_range = {
@@ -110,7 +115,8 @@ class Unit:
             UnitType.TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,       
             UnitType.ARTILLERY: 11300 / 1 / PIXEL_TO_METER_SCALE,  
             UnitType.DRONE: 0,      
-            UnitType.COMMAND_POST: 400 / 5 / PIXEL_TO_METER_SCALE 
+            UnitType.COMMAND_POST: 400 / 5 / PIXEL_TO_METER_SCALE,
+            UnitType.SELF_DEST_DRONE: 400 / 5 / PIXEL_TO_METER_SCALE # 자폭드론의 사거리 조정 필요 
         }[self.unit_type]
 
     def can_move(self) -> bool:

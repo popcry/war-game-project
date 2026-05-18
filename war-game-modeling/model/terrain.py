@@ -203,7 +203,7 @@ class Terrain:
 
     def get_terrain_decay_rate(self, unit: Unit, position: Tuple[int, int]) -> float:
         """Return movement speed multiplier for the terrain at position."""
-        if unit.unit_type == UnitType.DRONE:
+        if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
             return 1.0
 
         terrain_type = self.get_terrain_type(position)

@@ -23,6 +23,7 @@ class Movement:
         UnitType.TANK: 13/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
         UnitType.ARTILLERY: 0 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
         UnitType.DRONE: 25/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
+        UnitType.SELF_DEST_DRONE: 25/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30,
         UnitType.COMMAND_POST: 5/5 * 1000/3600 /PIXEL_TO_METER_SCALE * 30
     }
      
@@ -53,7 +54,7 @@ class Movement:
 
     def calculate_drone_objective(self, unit: Unit, command: Command, current_time: float) -> Tuple[float, float]:
         """드론의 목표 지점 계산"""
-        if unit.unit_type != UnitType.DRONE:
+        if unit.unit_type not in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
             return None
 
         # TAI 위치
@@ -95,7 +96,7 @@ class Movement:
 
     def get_objective(self, unit: Unit, command: Command, current_time: float) -> Optional[Tuple[float, float]]:
         """유닛 타입에 따른 목적지 반환"""
-        if unit.unit_type == UnitType.DRONE:
+        if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
             return self.calculate_drone_objective(unit, command, current_time)
         elif unit.unit_type in [UnitType.RIFLE, UnitType.TANK, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
             if command.maneuver_objective and len(command.maneuver_objective) > 0:
@@ -134,7 +135,7 @@ class Movement:
 
         # 목표 지점에 도달했는지 확인
         if distance < self.MIN_DISTANCE_TO_OBJECTIVE:
-            if unit.unit_type == UnitType.DRONE:
+            if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
                 # 드론의 경우 다음 패턴으로 즉시 이동
                 current_pattern = self.drone_positions.get(unit.id, 0)
                 next_pattern = (current_pattern + 1) % len(self.DRONE_PATTERN)

@@ -33,8 +33,8 @@ unit_sound_map = {
     UnitType.COMMAND_POST: 'RIFLE',
     UnitType.ANTI_TANK: 'TANK',
     UnitType.TANK: 'TANK',
-    UnitType.ARTILLERY: 'ARTILLERY'
-
+    UnitType.ARTILLERY: 'ARTILLERY',
+    UnitType.SELF_DEST_DRONE: 'ARTILLERY'  # 자폭 드론은 포병 사운드 사용
 }
 
 
@@ -96,7 +96,8 @@ class Visualizer:
             UnitType.TANK: "T",
             UnitType.ARTILLERY: "A",
             UnitType.DRONE: "D",
-            UnitType.COMMAND_POST: "CP"
+            UnitType.COMMAND_POST: "CP",
+            UnitType.SELF_DEST_DRONE: "SD"
         }
         
         # 유닛 크기
@@ -298,7 +299,7 @@ class Visualizer:
                     color = self.colors[unit.team]
                     
                     # Artillery인 경우
-                    if unit.unit_type == UnitType.ARTILLERY:
+                    if unit.unit_type in [UnitType.ARTILLERY, UnitType.SELF_DEST_DRONE]:
                         # 탄착지점 계산
                         distance = calculate_distance(unit, target)
                         impact_point = self.fire.calculate_impact_point(target.position, distance)
