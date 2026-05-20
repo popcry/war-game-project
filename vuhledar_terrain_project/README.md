@@ -173,3 +173,18 @@ print(grid["terrain_type"].value_counts())
 - OSMnx documentation: https://osmnx.readthedocs.io/
 - Copernicus DEM on AWS Open Data: https://registry.opendata.aws/copernicus-dem/
 - Copernicus DEM S3 readme: https://copernicus-dem-30m.s3.amazonaws.com/readme.html
+
+## Local Grid-Index PNG Maps
+
+The build script also creates PNG maps whose axes start at the lower-left AOI grid origin `(0,0)`.
+For `--cell-size 30`, one grid-index unit equals `30m`.
+
+Generated grid-index PNG files include:
+
+- `outputs/vuhledar_static_map_grid_index_30m.png`
+- `outputs/vuhledar_terrain_classification_grid_index_30m.png`
+- `outputs/vuhledar_contour_map_grid_index_30m.png`, when DEM is available
+- `outputs/vuhledar_slope_map_grid_index_30m.png`, when DEM is available
+- `outputs/vuhledar_hillshade_grid_index_30m.png`, when DEM is available
+
+The original PNG maps without `_grid_index_...` keep EPSG:32637 UTM meter axes for GIS reference.

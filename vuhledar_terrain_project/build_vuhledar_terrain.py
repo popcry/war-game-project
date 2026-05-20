@@ -16,6 +16,7 @@ import folium
 import geopandas as gpd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import numpy as np
 import osmnx as ox
 import pandas as pd
@@ -26,6 +27,7 @@ from rasterio.enums import Resampling
 from rasterio.merge import merge
 from rasterio.warp import calculate_default_transform, reproject
 from shapely.geometry import Point, Polygon, box, mapping
+from shapely.ops import transform as shapely_transform
 from shapely.prepared import prep
 from tqdm import tqdm
 
@@ -179,6 +181,15 @@ def cell_size_label(cell_size: float) -> str:
 def output_path_for_cell_size(output_dir: Path, base_name: str, extension: str, cell_size: float) -> Path:
     if int(cell_size) == 50 and float(cell_size).is_integer():
         return output_dir / f"{base_name}.{extension}"
+    return output_dir / f"{base_name}_{cell_size_label(cell_size)}.{extension}"
+
+
+def output_path_always_for_cell_size(
+    output_dir: Path,
+    base_name: str,
+    extension: str,
+    cell_size: float,
+) -> Path:
     return output_dir / f"{base_name}_{cell_size_label(cell_size)}.{extension}"
 
 
@@ -1013,6 +1024,214 @@ def save_terrain_overlay_png(grid: gpd.GeoDataFrame, output_path: Path) -> Path:
     return output_path
 
 
+def grid_index_context(grid: gpd.GeoDataFrame, cell_size: float) -> tuple[float, float, int, int]:
+    minx, miny, maxx, maxy = grid.total_bounds
+    origin_x = math.floor(minx / cell_size) * cell_size
+    origin_y = math.floor(miny / cell_size) * cell_size
+    cols = int(round((maxx - origin_x) / cell_size))
+    rows = int(round((maxy - origin_y) / cell_size))
+    return origin_x, origin_y, cols, rows
+
+
+def choose_grid_tick_step(max_units: float) -> int:
+    if max_units <= 35:
+        return 5
+    if max_units <= 90:
+        return 10
+    if max_units <= 220:
+        return 20
+    if max_units <= 700:
+        return 50
+    return 100
+
+
+def terrain_grid_index_array(
+    grid: gpd.GeoDataFrame,
+    cell_size: float,
+) -> tuple[np.ndarray, tuple[float, float, int, int]]:
+    origin_x, origin_y, cols, rows = grid_index_context(grid, cell_size)
+    rgba = np.zeros((rows, cols, 4), dtype=float)
+    centroids = grid.geometry.centroid
+    col_indices = np.floor((centroids.x - origin_x) / cell_size).astype(int)
+    row_indices = np.floor((centroids.y - origin_y) / cell_size).astype(int)
+
+    for terrain_type, color in COLORS.items():
+        if terrain_type not in TERRAIN_FACTORS:
+            continue
+        mask = grid["terrain_type"] == terrain_type
+        if not mask.any():
+            continue
+        valid_rows = row_indices[mask]
+        valid_cols = col_indices[mask]
+        valid_mask = (
+            (valid_rows >= 0)
+            & (valid_rows < rows)
+            & (valid_cols >= 0)
+            & (valid_cols < cols)
+        )
+        rgba[valid_rows[valid_mask], valid_cols[valid_mask], :] = mcolors.to_rgba(
+            color,
+            alpha=0.80,
+        )
+
+    return rgba, (origin_x, origin_y, cols, rows)
+
+
+def to_grid_index_gdf(
+    gdf: gpd.GeoDataFrame,
+    origin_x: float,
+    origin_y: float,
+    cell_size: float,
+) -> gpd.GeoDataFrame:
+    if gdf.empty:
+        return gdf
+
+    def transform_geometry(geometry: Any) -> Any:
+        if geometry is None or geometry.is_empty:
+            return geometry
+
+        def coord_fn(x: float, y: float, z: float | None = None) -> Any:
+            grid_x = (x - origin_x) / cell_size
+            grid_y = (y - origin_y) / cell_size
+            if z is None:
+                return grid_x, grid_y
+            return grid_x, grid_y, z
+
+        return shapely_transform(coord_fn, geometry)
+
+    indexed = gdf.copy()
+    indexed["geometry"] = indexed.geometry.apply(transform_geometry)
+    return indexed.set_crs(None, allow_override=True)
+
+
+def plot_grid_index_overlays(
+    ax: Any,
+    layers_utm: dict[str, gpd.GeoDataFrame],
+    origin_x: float,
+    origin_y: float,
+    cell_size: float,
+    include_buildings: bool,
+    road_width: float,
+) -> None:
+    buildings = to_grid_index_gdf(
+        layers_utm.get("buildings", empty_gdf(CRS_PROJECTED)),
+        origin_x,
+        origin_y,
+        cell_size,
+    )
+    roads = to_grid_index_gdf(
+        layers_utm.get("roads", empty_gdf(CRS_PROJECTED)),
+        origin_x,
+        origin_y,
+        cell_size,
+    )
+    railways = to_grid_index_gdf(
+        layers_utm.get("railways", empty_gdf(CRS_PROJECTED)),
+        origin_x,
+        origin_y,
+        cell_size,
+    )
+    waterways = to_grid_index_gdf(
+        layers_utm.get("waterways", empty_gdf(CRS_PROJECTED)),
+        origin_x,
+        origin_y,
+        cell_size,
+    )
+
+    if include_buildings and not buildings.empty:
+        buildings.plot(ax=ax, color=COLORS["buildings"], edgecolor="none", alpha=0.60, zorder=4)
+    if not waterways.empty:
+        waterways.plot(ax=ax, color=COLORS["waterways"], linewidth=0.9, alpha=0.90, zorder=5)
+    if not railways.empty:
+        railways.plot(ax=ax, color=COLORS["railways"], linewidth=1.0, alpha=0.90, zorder=6)
+    if not roads.empty:
+        roads.plot(ax=ax, color=COLORS["roads"], linewidth=road_width, alpha=0.92, zorder=7)
+
+
+def setup_grid_index_axes(ax: Any, cols: int, rows: int, cell_size: float, title: str) -> None:
+    tick_step = choose_grid_tick_step(max(cols, rows))
+    ax.xaxis.set_major_locator(MultipleLocator(tick_step))
+    ax.yaxis.set_major_locator(MultipleLocator(tick_step))
+    ax.xaxis.set_minor_locator(MultipleLocator(max(1, tick_step // 2)))
+    ax.yaxis.set_minor_locator(MultipleLocator(max(1, tick_step // 2)))
+    ax.grid(which="major", color="white", linewidth=0.50, alpha=0.38)
+    ax.grid(which="minor", color="white", linewidth=0.22, alpha=0.16)
+    ax.set_xlim(0, cols)
+    ax.set_ylim(0, rows)
+    ax.set_aspect("equal")
+    ax.set_title(title)
+    ax.set_xlabel(f"Grid X index from lower-left origin (1 = {cell_size:g} m)")
+    ax.set_ylabel(f"Grid Y index from lower-left origin (1 = {cell_size:g} m)")
+
+
+def grid_index_legend_handles(
+    include_terrain: bool = True,
+    include_buildings: bool = False,
+    include_contours: bool = False,
+) -> list[Any]:
+    handles: list[Any] = []
+    if include_contours:
+        handles.append(plt.Line2D([0], [0], color="#2b2b2b", linewidth=0.8, label="10 m contour"))
+    if include_terrain:
+        handles.extend(
+            plt.Line2D(
+                [0],
+                [0],
+                marker="s",
+                color="none",
+                markerfacecolor=COLORS[name],
+                markersize=10,
+                label=name,
+            )
+            for name in TERRAIN_FACTORS
+        )
+    if include_buildings:
+        handles.append(
+            plt.Line2D([0], [0], color=COLORS["buildings"], linewidth=4.0, label="buildings")
+        )
+    handles.extend(
+        [
+            plt.Line2D([0], [0], color=COLORS["roads"], linewidth=2.2, label="roads"),
+            plt.Line2D([0], [0], color=COLORS["waterways"], linewidth=1.4, label="waterways"),
+            plt.Line2D([0], [0], color=COLORS["railways"], linewidth=1.4, label="railways"),
+        ]
+    )
+    return handles
+
+
+def raster_grid_index_data(
+    raster_path: Path,
+    origin_x: float,
+    origin_y: float,
+    cell_size: float,
+) -> tuple[np.ndarray, tuple[float, float, float, float], np.ndarray, np.ndarray, Any]:
+    with rasterio.open(raster_path) as src:
+        array = src.read(1).astype("float64")
+        nodata = src.nodata
+        if nodata is not None:
+            array[array == nodata] = np.nan
+        bounds = src.bounds
+        transform = src.transform
+        width = src.width
+        height = src.height
+
+    x_centers = transform.c + (np.arange(width) + 0.5) * transform.a
+    y_centers = transform.f + (np.arange(height) + 0.5) * transform.e
+    x = (x_centers - origin_x) / cell_size
+    y = (y_centers - origin_y) / cell_size
+    if y[0] > y[-1]:
+        y = y[::-1]
+        array = array[::-1, :]
+
+    extent = (
+        (bounds.left - origin_x) / cell_size,
+        (bounds.right - origin_x) / cell_size,
+        (bounds.bottom - origin_y) / cell_size,
+        (bounds.top - origin_y) / cell_size,
+    )
+    return array, extent, x, y, transform
+
+
 def make_static_map(
     grid: gpd.GeoDataFrame,
     layers_utm: dict[str, gpd.GeoDataFrame],
@@ -1099,6 +1318,79 @@ def make_terrain_classification_map(
     plt.close(fig)
 
 
+def make_static_grid_index_map(
+    grid: gpd.GeoDataFrame,
+    layers_utm: dict[str, gpd.GeoDataFrame],
+    output_path: Path,
+    cell_size: float,
+) -> None:
+    print("[MAP] Rendering static terrain map with local grid-index axes...")
+    rgba, (origin_x, origin_y, cols, rows) = terrain_grid_index_array(grid, cell_size)
+    fig, ax = plt.subplots(figsize=(18, 14))
+    ax.imshow(rgba, origin="lower", extent=(0, cols, 0, rows), interpolation="nearest")
+    plot_grid_index_overlays(
+        ax,
+        layers_utm,
+        origin_x,
+        origin_y,
+        cell_size,
+        include_buildings=True,
+        road_width=1.4,
+    )
+    setup_grid_index_axes(
+        ax,
+        cols,
+        rows,
+        cell_size,
+        f"Vuhledar Terrain Grid ({cell_size:g} m) - Local Grid Coordinates",
+    )
+    ax.legend(
+        handles=grid_index_legend_handles(include_buildings=True),
+        loc="lower right",
+        framealpha=0.92,
+    )
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+
+
+def make_terrain_classification_grid_index_map(
+    grid: gpd.GeoDataFrame,
+    layers_utm: dict[str, gpd.GeoDataFrame],
+    output_path: Path,
+    cell_size: float,
+) -> None:
+    print("[MAP] Rendering terrain classification map with local grid-index axes...")
+    rgba, (origin_x, origin_y, cols, rows) = terrain_grid_index_array(grid, cell_size)
+    fig, ax = plt.subplots(figsize=(18, 14))
+    ax.imshow(rgba, origin="lower", extent=(0, cols, 0, rows), interpolation="nearest")
+    plot_grid_index_overlays(
+        ax,
+        layers_utm,
+        origin_x,
+        origin_y,
+        cell_size,
+        include_buildings=True,
+        road_width=1.6,
+    )
+    setup_grid_index_axes(
+        ax,
+        cols,
+        rows,
+        cell_size,
+        f"Vuhledar Terrain Classification - Local Grid Coordinates",
+    )
+    ax.legend(
+        handles=grid_index_legend_handles(include_buildings=True),
+        loc="lower right",
+        framealpha=0.94,
+        title="terrain_type",
+    )
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+
+
 def make_contour_map(
     dem_products: DemProducts | None,
     layers_utm: dict[str, gpd.GeoDataFrame],
@@ -1175,6 +1467,233 @@ def make_contour_map(
     ax.set_xlabel("Easting (m), EPSG:32637")
     ax.set_ylabel("Northing (m), EPSG:32637")
     ax.set_aspect("equal")
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+    return True
+
+
+def make_contour_grid_index_map(
+    dem_products: DemProducts | None,
+    grid: gpd.GeoDataFrame,
+    layers_utm: dict[str, gpd.GeoDataFrame],
+    output_path: Path,
+    cell_size: float,
+) -> bool:
+    if dem_products is None:
+        print("[MAP] Skipping grid-index contour map because DEM is unavailable.")
+        return False
+
+    print("[MAP] Rendering DEM contour map with local grid-index axes...")
+    origin_x, origin_y, cols, rows = grid_index_context(grid, cell_size)
+    elevation, extent, x, y, _ = raster_grid_index_data(
+        dem_products.dem_path,
+        origin_x,
+        origin_y,
+        cell_size,
+    )
+
+    finite = elevation[np.isfinite(elevation)]
+    if finite.size == 0:
+        print("[MAP] Skipping grid-index contour map because DEM contains no finite elevation values.")
+        return False
+
+    vmin = float(np.nanpercentile(finite, 2))
+    vmax = float(np.nanpercentile(finite, 98))
+    min_level = math.floor(float(np.nanmin(finite)) / 10.0) * 10.0
+    max_level = math.ceil(float(np.nanmax(finite)) / 10.0) * 10.0
+    contour_levels = np.arange(min_level, max_level + 10.0, 10.0)
+    label_levels = np.arange(min_level, max_level + 20.0, 20.0)
+
+    fig, ax = plt.subplots(figsize=(18, 14))
+    image = ax.imshow(
+        elevation,
+        extent=extent,
+        origin="lower",
+        cmap="terrain",
+        vmin=vmin,
+        vmax=vmax,
+        alpha=0.96,
+        interpolation="nearest",
+    )
+    ax.contour(
+        x,
+        y,
+        elevation,
+        levels=contour_levels,
+        colors="#2b2b2b",
+        linewidths=0.30,
+        alpha=0.78,
+    )
+    label_contours = ax.contour(
+        x,
+        y,
+        elevation,
+        levels=label_levels,
+        colors="#111111",
+        linewidths=0.45,
+        alpha=0.90,
+    )
+    ax.clabel(label_contours, inline=True, fmt="%d m", fontsize=5)
+
+    plot_grid_index_overlays(
+        ax,
+        layers_utm,
+        origin_x,
+        origin_y,
+        cell_size,
+        include_buildings=False,
+        road_width=1.6,
+    )
+    setup_grid_index_axes(
+        ax,
+        cols,
+        rows,
+        cell_size,
+        "Vuhledar DEM Contours - Local Grid Coordinates",
+    )
+    ax.legend(
+        handles=grid_index_legend_handles(include_terrain=False, include_contours=True),
+        loc="lower right",
+        framealpha=0.88,
+    )
+    fig.colorbar(image, ax=ax, shrink=0.72, label="Elevation (m)")
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+    return True
+
+
+def make_slope_grid_index_map(
+    dem_products: DemProducts | None,
+    grid: gpd.GeoDataFrame,
+    layers_utm: dict[str, gpd.GeoDataFrame],
+    output_path: Path,
+    cell_size: float,
+) -> bool:
+    if dem_products is None:
+        print("[MAP] Skipping grid-index slope map because DEM is unavailable.")
+        return False
+
+    print("[MAP] Rendering slope map with local grid-index axes...")
+    origin_x, origin_y, cols, rows = grid_index_context(grid, cell_size)
+    slope_percent, extent, _, _, _ = raster_grid_index_data(
+        dem_products.slope_path,
+        origin_x,
+        origin_y,
+        cell_size,
+    )
+    finite = slope_percent[np.isfinite(slope_percent)]
+    vmax = float(np.nanpercentile(finite, 98)) if finite.size else 1.0
+
+    fig, ax = plt.subplots(figsize=(18, 14))
+    image = ax.imshow(
+        slope_percent,
+        extent=extent,
+        origin="lower",
+        cmap="inferno",
+        vmin=0,
+        vmax=vmax,
+        interpolation="nearest",
+    )
+    plot_grid_index_overlays(
+        ax,
+        layers_utm,
+        origin_x,
+        origin_y,
+        cell_size,
+        include_buildings=False,
+        road_width=1.25,
+    )
+    setup_grid_index_axes(
+        ax,
+        cols,
+        rows,
+        cell_size,
+        "Vuhledar Slope Map - Local Grid Coordinates",
+    )
+    ax.legend(
+        handles=grid_index_legend_handles(include_terrain=False),
+        loc="lower right",
+        framealpha=0.88,
+    )
+    fig.colorbar(image, ax=ax, shrink=0.72, label="Slope (%)")
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+    return True
+
+
+def make_hillshade_grid_index_map(
+    dem_products: DemProducts | None,
+    grid: gpd.GeoDataFrame,
+    layers_utm: dict[str, gpd.GeoDataFrame],
+    output_path: Path,
+    cell_size: float,
+) -> bool:
+    if dem_products is None:
+        print("[MAP] Skipping grid-index hillshade map because DEM is unavailable.")
+        return False
+
+    print("[MAP] Rendering hillshade map with local grid-index axes...")
+    origin_x, origin_y, cols, rows = grid_index_context(grid, cell_size)
+    elevation, extent, _, _, transform = raster_grid_index_data(
+        dem_products.dem_path,
+        origin_x,
+        origin_y,
+        cell_size,
+    )
+    finite = elevation[np.isfinite(elevation)]
+    if finite.size == 0:
+        print("[MAP] Skipping grid-index hillshade map because DEM contains no finite elevation values.")
+        return False
+
+    x_res = abs(transform.a)
+    y_res = abs(transform.e)
+    grad_y, grad_x = np.gradient(elevation, y_res, x_res)
+    azimuth = np.deg2rad(315.0)
+    altitude = np.deg2rad(45.0)
+    slope_rad = np.arctan(np.sqrt(grad_x**2 + grad_y**2))
+    aspect = np.arctan2(-grad_x, grad_y)
+    hillshade = (
+        np.sin(altitude) * np.cos(slope_rad)
+        + np.cos(altitude) * np.sin(slope_rad) * np.cos(azimuth - aspect)
+    )
+    hillshade = np.clip(hillshade, 0, 1)
+    hillshade[~np.isfinite(elevation)] = np.nan
+
+    fig, ax = plt.subplots(figsize=(18, 14))
+    image = ax.imshow(
+        hillshade,
+        extent=extent,
+        origin="lower",
+        cmap="gray",
+        vmin=0,
+        vmax=1,
+        interpolation="nearest",
+    )
+    plot_grid_index_overlays(
+        ax,
+        layers_utm,
+        origin_x,
+        origin_y,
+        cell_size,
+        include_buildings=False,
+        road_width=1.25,
+    )
+    setup_grid_index_axes(
+        ax,
+        cols,
+        rows,
+        cell_size,
+        "Vuhledar Hillshade - Local Grid Coordinates",
+    )
+    ax.legend(
+        handles=grid_index_legend_handles(include_terrain=False),
+        loc="lower right",
+        framealpha=0.88,
+    )
+    fig.colorbar(image, ax=ax, shrink=0.72, label="Hillshade")
     plt.tight_layout()
     fig.savefig(output_path, dpi=220)
     plt.close(fig)
@@ -1491,6 +2010,36 @@ def main() -> None:
         "png",
         args.cell_size,
     )
+    static_grid_index_map_path = output_path_always_for_cell_size(
+        output_dir,
+        "vuhledar_static_map_grid_index",
+        "png",
+        args.cell_size,
+    )
+    contour_grid_index_map_path = output_path_always_for_cell_size(
+        output_dir,
+        "vuhledar_contour_map_grid_index",
+        "png",
+        args.cell_size,
+    )
+    classification_grid_index_map_path = output_path_always_for_cell_size(
+        output_dir,
+        "vuhledar_terrain_classification_grid_index",
+        "png",
+        args.cell_size,
+    )
+    slope_grid_index_map_path = output_path_always_for_cell_size(
+        output_dir,
+        "vuhledar_slope_map_grid_index",
+        "png",
+        args.cell_size,
+    )
+    hillshade_grid_index_map_path = output_path_always_for_cell_size(
+        output_dir,
+        "vuhledar_hillshade_grid_index",
+        "png",
+        args.cell_size,
+    )
     overlay_path = output_path_for_cell_size(output_dir, "vuhledar_terrain_overlay", "png", args.cell_size)
     osm_html_path = output_dir / "vuhledar_osm_layers_map.html"
     grid_html_path = output_path_for_cell_size(output_dir, "vuhledar_terrain_grid_map", "html", args.cell_size)
@@ -1498,13 +2047,52 @@ def main() -> None:
 
     make_static_map(attributed_grid, layers_utm, static_map_path, args.cell_size)
     make_terrain_classification_map(attributed_grid, layers_utm, classification_map_path, args.cell_size)
+    make_static_grid_index_map(attributed_grid, layers_utm, static_grid_index_map_path, args.cell_size)
+    make_terrain_classification_grid_index_map(
+        attributed_grid,
+        layers_utm,
+        classification_grid_index_map_path,
+        args.cell_size,
+    )
     if make_contour_map(dem_products, layers_utm, contour_map_path):
         generated_files.append(contour_map_path)
+    if make_contour_grid_index_map(
+        dem_products,
+        attributed_grid,
+        layers_utm,
+        contour_grid_index_map_path,
+        args.cell_size,
+    ):
+        generated_files.append(contour_grid_index_map_path)
+    if make_slope_grid_index_map(
+        dem_products,
+        attributed_grid,
+        layers_utm,
+        slope_grid_index_map_path,
+        args.cell_size,
+    ):
+        generated_files.append(slope_grid_index_map_path)
+    if make_hillshade_grid_index_map(
+        dem_products,
+        attributed_grid,
+        layers_utm,
+        hillshade_grid_index_map_path,
+        args.cell_size,
+    ):
+        generated_files.append(hillshade_grid_index_map_path)
     save_terrain_overlay_png(attributed_grid, overlay_path)
     make_osm_html_map(layers_wgs, south, west, north, east, osm_html_path)
     make_grid_html_map(attributed_grid, overlay_path, south, west, north, east, grid_html_path)
     generated_files.extend(
-        [static_map_path, classification_map_path, overlay_path, osm_html_path, grid_html_path]
+        [
+            static_map_path,
+            classification_map_path,
+            static_grid_index_map_path,
+            classification_grid_index_map_path,
+            overlay_path,
+            osm_html_path,
+            grid_html_path,
+        ]
     )
     generated_files.append(report_path)
 
