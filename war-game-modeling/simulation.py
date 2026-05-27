@@ -9,6 +9,7 @@ from model.fire import Fire
 from model.detect import Detect
 from model.movement import Movement
 from model.command import Command, Phase
+from model.money import MoneyTracker
 import heapq
 import argparse
 import os
@@ -40,7 +41,8 @@ def _safe_rmtree(path: str) -> None:
 
 class Simulation:
     def __init__(self, config_file: str, time_scale: float = 1.0, sim_speed: float = 1.0, 
-                 show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False):
+                 show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False,
+                 record_video: Optional[bool] = None):
         """시뮬레이션 초기화"""
         self.config = self._load_config(config_file)
         self.units = []
@@ -54,7 +56,8 @@ class Simulation:
         self.show_fire = show_fire
         
         # 비디오 설정
-        self.record_video = self.config.get('video', {}).get('enabled', False)
+        configured_record_video = self.config.get('video', {}).get('enabled', False)
+        self.record_video = configured_record_video if record_video is None else record_video
         self.output_path = self.config.get('video', {}).get('output_path', 'simulation.mp4')
         self.video_fps = self.config.get('video', {}).get('fps', 30)
         
@@ -67,8 +70,9 @@ class Simulation:
         self.max_time = self.config.get('max_time', 100.0)
         
         # 모델 컴포넌트 초기화
+        self.money_tracker = MoneyTracker(self.config.get('money', {}))
         self.movement = Movement()
-        self.fire = Fire()
+        self.fire = Fire(self.money_tracker)
         self.detect = Detect()
         
         # 명령 초기화
@@ -78,7 +82,7 @@ class Simulation:
         }
         
         # 시각화 초기화
-        self.visualizer = Visualizer(800, 450, show_detection=self.show_detection, show_eligible_targets=self.show_eligible_targets, show_fire=self.show_fire, record_video=self.record_video, output_path=self.output_path)
+        self.visualizer = Visualizer(800, 450, show_detection=self.show_detection, show_eligible_targets=self.show_eligible_targets, show_fire=self.show_fire, record_video=self.record_video, output_path=self.output_path, money_tracker=self.money_tracker)
         self.visualizer.fire = self.fire  # Fire 객체 공유
         self.visualizer.commands = self.commands  # Command 정보 공유
         
@@ -185,7 +189,13 @@ class Simulation:
                 return self.fire.fire(attacker, target, self.units, self.commands[attacker.team], self.current_time)
         return None
 
-    def run_simulation(self, max_time: float = None):
+    def print_money_summary(self):
+        """Print final money totals for both teams."""
+        print("Money summary:")
+        print(self.money_tracker.format_team_summary(Team.RED))
+        print(self.money_tracker.format_team_summary(Team.BLUE))
+
+    def run_simulation(self, max_time: float = None, hold_open: bool = True):
         """시뮬레이션 실행"""
         if max_time is None:
             max_time = self.max_time
@@ -295,6 +305,11 @@ class Simulation:
             self.visualizer.create_video(self.output_path, self.video_fps)
             # 비디오 생성 후 프레임 디렉토리 정리
             _safe_rmtree(self.visualizer.frame_dir)
+
+        self.print_money_summary()
+        if not hold_open:
+            self.visualizer.close()
+            return
         
         # 창 유지
         while True:
@@ -313,6 +328,9 @@ if __name__ == "__main__":
     parser.add_argument('--eligible_TL', type=str, choices=['T', 'F'], default='F', help='Show eligible target lines (T/F)')
     parser.add_argument('--fire', type=str, choices=['T', 'F'], default='F', help='Show fire lines (T/F)')
     parser.add_argument('--sim_speed', type=float, default=1.0, help='Simulation speed')
+    parser.add_argument('--max-time', type=float, default=None, help='Override max simulation time')
+    parser.add_argument('--no-hold', action='store_true', help='Close the simulation window at the end')
+    parser.add_argument('--no-video', action='store_true', help='Disable video recording for this run')
 
     args = parser.parse_args()
     
@@ -322,6 +340,7 @@ if __name__ == "__main__":
         show_detection=(args.detection == 'T'),
         show_eligible_targets=(args.eligible_TL == 'T'),
         show_fire=(args.fire == 'T'),
-        sim_speed=args.sim_speed
+        sim_speed=args.sim_speed,
+        record_video=False if args.no_video else None
     )
-    simulation.run_simulation() 
+    simulation.run_simulation(max_time=args.max_time, hold_open=not args.no_hold)

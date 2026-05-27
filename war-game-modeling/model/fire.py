@@ -6,6 +6,7 @@ from model.detect import Detect
 from model.terrain import Terrain
 from model.probabilities import ProbabilitySystem
 from model.function import calculate_distance, calculate_point_distance
+from model.money import MoneyTracker
 import random
 import math
 import pandas as pd
@@ -17,9 +18,18 @@ with open('config.yaml', 'r') as f:
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 
 class Fire:
-    def __init__(self):
+    def __init__(self, money_tracker: Optional[MoneyTracker] = None):
         self.detect = Detect()
         self.terrain = Terrain()
+        self.money_tracker = money_tracker
+
+    def record_damage_cost(self, unit: Unit, old_status: Status, new_status: Status) -> None:
+        if self.money_tracker and old_status != new_status:
+            self.money_tracker.record_damage(unit, old_status, new_status)
+
+    def record_fire_cost(self, attacker: Unit) -> None:
+        if self.money_tracker:
+            self.money_tracker.record_fire(attacker)
 
     
 
@@ -111,6 +121,7 @@ class Fire:
                             cumulative += prob
                             if rand_val <= cumulative:
                                 unit.update_status(status)
+                                self.record_damage_cost(unit, old_status, status)
                                 affected_units.append((unit, old_status, status))
                                 break
 
@@ -232,6 +243,7 @@ class Fire:
                 return None
             
             # 탄착지점 주변의 모든 유닛에 대한 피해 적용
+            self.record_fire_cost(attacker)
             self.apply_artillery_damage(impact_point, all_units, current_time)
             attacker.update_action(Action.STOP)  # 사격 완료 후 STOP으로 변경
             if attacker.unit_type == UnitType.SELF_DEST_DRONE:
@@ -254,6 +266,7 @@ class Fire:
             - 탱크·곡사포: MF-kill 이상이면 “무력화 성공” (재탐색 대신 후속 사격 중지)
             - 소총·대전차·지휘관: 치명상(Fatal)이면 “무력화 성공”
         """
+        self.record_fire_cost(attacker)
         protection_state = self.get_protection_state(target)
         hit_prob = (
             ProbabilitySystem.get_hit_probability(attacker.unit_type, target.unit_type, distance, protection_state)
@@ -285,6 +298,7 @@ class Fire:
                 cumulative += prob   # multivariante probability sampling method
                 if rand_val <= cumulative:
                     target.update_status(status)
+                    self.record_damage_cost(target, old_status, status)
                     break
 
         attacker.update_action(Action.STOP)  # 사격 완료 후 STOP으로 변경

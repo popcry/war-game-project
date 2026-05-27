@@ -1,5 +1,5 @@
 
-max_time: 360
+max_time: 3600
 
 # Video settings
 video:
@@ -59,6 +59,39 @@ simulation:
   lethal_radius: 30.0  # Artillery lethal radius in meters
   mountain_detect_prob: 0.2  # Detection probability in mountain terrain
   drone_elevation: 200.0  # Drone elevation in meters
+
+# Money tracking settings
+# fire_cost is charged to the team that fires.
+# damage cost is charged to the team that owns the damaged unit.
+money:
+  fire_cost:
+    RIFLE: 10
+    ANTI_TANK: 200
+    TANK: 300
+    ARTILLERY: 500
+    DRONE: 0
+    SELF_DEST_DRONE: 1000
+    COMMAND_POST: 0
+
+  unit_value:
+    RIFLE: 100
+    ANTI_TANK: 800
+    TANK: 5000
+    ARTILLERY: 3000
+    DRONE: 1500
+    SELF_DEST_DRONE: 2000
+    COMMAND_POST: 10000
+
+  damage_ratio:
+    ALIVE: 0.0
+    MINOR: 0.1
+    SERIOUS: 0.5
+    CRITICAL: 0.8
+    FATAL: 1.0
+    M_KILL: 0.4
+    F_KILL: 0.4
+    MF_KILL: 0.7
+    K_KILL: 1.0
 
 # Terrain layer settings
 # Layer priority in model/terrain.py:

@@ -43,7 +43,7 @@ with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 class Visualizer:
-    def __init__(self, width: int = 1600, height: int = 900, show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False, record_video: bool = False, output_path: str = "simulation.mp4"):
+    def __init__(self, width: int = 1600, height: int = 900, show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False, record_video: bool = False, output_path: str = "simulation.mp4", money_tracker=None):
         pygame.init()
         self.width = width
         self.height = height
@@ -52,6 +52,7 @@ class Visualizer:
         self.show_detection = show_detection
         self.show_eligible_targets = show_eligible_targets
         self.show_fire = show_fire
+        self.money_tracker = money_tracker
         
         # 이벤트와 시간 정보
         self.events = []
@@ -147,8 +148,8 @@ class Visualizer:
     def draw_unit_count_panel(self, units: List[Unit]):
         """생존 유닛 수를 보여주는 패널 그리기"""
         # 패널 크기와 위치 설정
-        panel_width = 200
-        panel_height = 180  # 높이를 늘려서 로그 공간 확보
+        panel_width = 260
+        panel_height = 280  # 높이를 늘려서 돈 표시 공간 확보
         panel_x = 10  # 왼쪽으로 이동
         panel_y = 10
         
@@ -212,6 +213,34 @@ class Visualizer:
         blue_phase = phase_names.get(self.commands[Team.BLUE].phase.name, self.commands[Team.BLUE].phase.name)
         blue_phase_text = self.team_count_font.render(f"Blue : {blue_phase}", True, self.colors[Team.BLUE])
         self.screen.blit(blue_phase_text, (panel_x + 10, separator_y + 60))
+
+        if self.money_tracker:
+            money_separator_y = separator_y + 90
+            pygame.draw.line(
+                self.screen,
+                (100, 100, 100),
+                (panel_x + 5, money_separator_y),
+                (panel_x + panel_width - 5, money_separator_y),
+                1
+            )
+
+            money_title = self.panel_font.render("Money", True, (0, 0, 0))
+            self.screen.blit(money_title, (panel_x + 10, money_separator_y + 10))
+
+            red_money = self.money_tracker.get_team_summary(Team.RED)
+            blue_money = self.money_tracker.get_team_summary(Team.BLUE)
+            money_lines = [
+                (f"Red Fire: {red_money['fire']:,.0f}", self.colors[Team.RED]),
+                (f"Red Damage: {red_money['damage']:,.0f}", self.colors[Team.RED]),
+                (f"Red Total: {red_money['total']:,.0f}", self.colors[Team.RED]),
+                (f"Blue Fire: {blue_money['fire']:,.0f}", self.colors[Team.BLUE]),
+                (f"Blue Damage: {blue_money['damage']:,.0f}", self.colors[Team.BLUE]),
+                (f"Blue Total: {blue_money['total']:,.0f}", self.colors[Team.BLUE]),
+            ]
+
+            for index, (line, color) in enumerate(money_lines):
+                money_text = self.team_count_font.render(line, True, color)
+                self.screen.blit(money_text, (panel_x + 10, money_separator_y + 35 + index * 18))
 
     def draw_unit(self, unit: Unit):
         """유닛 그리기"""
