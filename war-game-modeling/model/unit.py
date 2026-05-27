@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Set, Optional
 from enum import Enum
 from model.event import Event, EventType
+import math
 import random
 import yaml
 
@@ -11,6 +12,11 @@ with open('config.yaml', 'r') as f:
 
 # Constants
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
+_UNITS_CFG = config['units']
+
+# 원본 코드 호환: 포병 이외는 detect/weapon range가 한 번 더 /5 적용 (의도된 스케일링)
+# 즉 effective_px = range_m / extra_div / pixel_to_meter_scale
+_NON_ARTILLERY_RANGE_EXTRA_DIV = 5
 
 class Team(Enum):
     RED = "RED"
@@ -55,24 +61,27 @@ class Unit:
     eligible_target_list: Set[int] = None
     objective: Optional[Tuple[float, float]] = None  # 이동 목표 지점
     target: Optional[int] = None  # 현재 사격 대상
+    yaw: float = 0.0  # heading (radians), updated when position changes
 
     def get_fire_interval(self) -> float:
-        """유닛 타입별 사격 소요시간 반환"""
-        if self.unit_type == UnitType.ARTILLERY:
-            return random.triangular(6.0, 20.0, 10.0)  # 105밀리견인포 지속사격 분당 3발(장전 20초), 최고 10발(장전 6초)
-        elif self.unit_type == UnitType.TANK:
-            return random.triangular(5.0, 10.0, 6.0)  # k-2전차 평균 분당 10발 (장전 6초)
-        elif self.unit_type == UnitType.ANTI_TANK:
-            return random.triangular(60.0, 180.0, 100.0)  # 현궁 급속사격 장전 1분, 정상사격 3분
-        else:  # RIFLE, COMMAND_POST
-            return random.uniform(2.0, 3.0)
+        """유닛 타입별 사격 소요시간 — config['units'][TYPE]['fire_interval']에서 읽음.
+        [a,b]    → uniform(a,b)
+        [a,b,c]  → triangular(low=a, high=b, mode=c)
+        null     → 무한대 (사격 안 함, 예: 드론)
+        """
+        fi = _UNITS_CFG[self.unit_type.name].get('fire_interval')
+        if fi is None:
+            return float('inf')
+        if len(fi) == 2:
+            return random.uniform(fi[0], fi[1])
+        return random.triangular(fi[0], fi[1], fi[2])
 
     def __post_init__(self):
         if self.target_list is None:
             self.target_list = set()
         if self.eligible_target_list is None:
             self.eligible_target_list = set()
-        
+
         # position이 tuple인지 확인
         if not isinstance(self.position, tuple):
             raise ValueError(f"Position must be a tuple, got {type(self.position)}")
@@ -85,33 +94,13 @@ class Unit:
         if len(self.position) != 2:
             raise ValueError(f"Position must be a 2D coordinate, got {self.position}")
 
-        # 임시 DB (나중에 DB에서 가져올 예정)
-        self.detect_range = {
-            UnitType.RIFLE: 1000 / 5 / PIXEL_TO_METER_SCALE,
-            UnitType.ANTI_TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,
-            UnitType.TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,     
-            UnitType.ARTILLERY: 1000 / 5 / PIXEL_TO_METER_SCALE,
-            UnitType.DRONE: 500 / 5 / PIXEL_TO_METER_SCALE,    
-            UnitType.COMMAND_POST: 1000 / 5 / PIXEL_TO_METER_SCALE
-        }[self.unit_type]
-
-        self.detectability = {
-            UnitType.RIFLE: 0.8,
-            UnitType.ANTI_TANK: 0.8,
-            UnitType.TANK: 2.0,     
-            UnitType.ARTILLERY: 2,
-            UnitType.DRONE: 0,    
-            UnitType.COMMAND_POST: 1.0
-        }[self.unit_type]
-
-        self.weapon_range = {
-            UnitType.RIFLE: 400 / 5 / PIXEL_TO_METER_SCALE,      
-            UnitType.ANTI_TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,  
-            UnitType.TANK: 3000 / 5 / PIXEL_TO_METER_SCALE,       
-            UnitType.ARTILLERY: 11300 / 1 / PIXEL_TO_METER_SCALE,  
-            UnitType.DRONE: 0,      
-            UnitType.COMMAND_POST: 400 / 5 / PIXEL_TO_METER_SCALE 
-        }[self.unit_type]
+        # config['units']에서 유닛 스펙 읽기
+        unit_cfg = _UNITS_CFG[self.unit_type.name]
+        # 포병만 m→px 직접 환산, 나머지는 한번 더 /5 (원본 스케일 보존)
+        extra_div = 1 if self.unit_type == UnitType.ARTILLERY else _NON_ARTILLERY_RANGE_EXTRA_DIV
+        self.detect_range = unit_cfg['detect_range_m'] / extra_div / PIXEL_TO_METER_SCALE
+        self.detectability = unit_cfg['detectability']
+        self.weapon_range = unit_cfg['weapon_range_m'] / extra_div / PIXEL_TO_METER_SCALE
 
     def can_move(self) -> bool:
         """이동 가능 여부 확인"""
@@ -126,6 +115,10 @@ class Unit:
 
     def update_position(self, new_position: Tuple[float, float]) -> None:
         """위치 업데이트"""
+        dx = new_position[0] - self.position[0]
+        dy = new_position[1] - self.position[1]
+        if dx * dx + dy * dy > 1e-9:
+            self.yaw = math.atan2(dy, dx)
         self.position = new_position
 
     def update_status(self, new_status: Status) -> None:

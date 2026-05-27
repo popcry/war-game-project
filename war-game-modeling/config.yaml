@@ -1,39 +1,203 @@
+# ============================================================
+# War-game simulation config
+# 모든 하이퍼파라미터는 이 파일에서 관리합니다.
+# 코드 수정 없이 이 파일만 바꿔서 실험 가능.
+# ============================================================
 
-max_time: 360
+# --- 시뮬레이션 시간 ---
+max_time: 300         # 시뮬레이션 상한 (초)
 
-# Video settings
+# --- 비디오 / CSV 출력 ---
 video:
   enabled: true
   output_path: "results/simulation.mp4"
   fps: 10
 
+csv:
+  enabled: true
+  output_path: "results/simulation.csv"
+
 distance_rescale: 1
 
+# --- 시뮬레이션 코어 ---
+simulation:
+  pixel_to_meter_scale: 5.0   # 1 픽셀 = 5m
+  map_width_px: 800           # 시각화/Pathfinder가 쓰는 맵 폭(px)
+  map_height_px: 450
+  lethal_radius_m: 30.0       # 포병 치사반경 (m)
+  mountain_detect_prob: 0.2   # 산악 지형에서의 탐지 성공 확률
+  drone_elevation_m: 200.0    # 드론 비행 고도 (m)
+
+# --- 지형 ---
+terrain:
+  dem_file: "database/xyz_coordinates.csv"
+  mountain_threshold_m: 50    # 이 고도 이상이면 'mountain'
+  river_threshold_m: 39       # 이 고도 이하면 'river'
+  decay_rates:
+    mountain: 0.8             # 산악 이동속도 감쇠
+    river: 0.8
+    normal: 1.0
+
+# --- 탐지 / LOS ---
+detection:
+  los_check_interval_px: 10   # 두 유닛 사이 LOS 샘플 간격 (픽셀)
+
+# --- 사격 ---
+fire:
+  artillery_sigma_range_pct: 0.02   # 포병 사거리 공산오차 (탄착점 σ_y = 이 값 × 사거리)
+  artillery_sigma_dev_pct: 0.01     # 포병 편의 공산오차 (σ_x)
+
+# --- 이동 ---
+movement:
+  min_distance_to_objective_m: 50   # 목표 지점 도달 판정 거리
+  objective_jitter_px: 100          # 팀 maneuver_objective에 더하는 ±랜덤 분산
+
+# --- 드론 정찰 ---
+drone:
+  grid_cell_size_m: 250             # 3×3 격자 한 칸 크기 (m) — 원본값
+  pattern_change_time_s: 60.0       # 다음 격자로 옮기는 주기 (초)
+
+# --- 유닛별 능력치 ---
+# fire_interval:
+#   [a, b]      → random.uniform(a, b)
+#   [a, b, c]   → random.triangular(a, b, c)   (low, high, mode)
+#   null        → 사격 안 함
+units:
+  RIFLE:
+    detect_range_m: 1000
+    detectability: 0.8
+    weapon_range_m: 400
+    speed_kmh: 7
+    fire_interval: [2.0, 3.0]
+  ANTI_TANK:
+    detect_range_m: 3000
+    detectability: 0.8
+    weapon_range_m: 3000
+    speed_kmh: 5
+    fire_interval: [60.0, 180.0, 100.0]
+  TANK:
+    detect_range_m: 3000
+    detectability: 2.0
+    weapon_range_m: 3000
+    speed_kmh: 13
+    fire_interval: [5.0, 10.0, 6.0]
+  ARTILLERY:
+    detect_range_m: 1000
+    detectability: 2.0
+    weapon_range_m: 11300
+    speed_kmh: 0
+    fire_interval: [6.0, 20.0, 10.0]
+  DRONE:
+    detect_range_m: 500
+    detectability: 0
+    weapon_range_m: 0
+    speed_kmh: 25
+    fire_interval: null
+  COMMAND_POST:
+    detect_range_m: 1000
+    detectability: 1.0
+    weapon_range_m: 400
+    speed_kmh: 5
+    fire_interval: [2.0, 3.0]
+
+# --- 작전단계 (Phase) ---
+# 각 팀의 단계별 TAI / 사격우선순위 / 기동목표
+# fire_priority 숫자가 낮을수록 포병 표적 우선순위 높음
+phases:
+  RED:
+    phase_1:
+      TAI: [400, 200]
+      fire_priority:
+        RIFLE: 5
+        ANTI_TANK: 4
+        TANK: 3
+        ARTILLERY: 1
+        COMMAND_POST: 2
+      maneuver_objective: null
+    phase_2:
+      TAI: [500, 150]
+      fire_priority:
+        RIFLE: 5
+        ANTI_TANK: 4
+        TANK: 1
+        ARTILLERY: 3
+        COMMAND_POST: 2
+      maneuver_objective: null
+    phase_3:
+      TAI: [500, 150]
+      fire_priority:
+        RIFLE: 4
+        ANTI_TANK: 2
+        TANK: 1
+        ARTILLERY: 5
+        COMMAND_POST: 3
+      maneuver_objective: null
+  BLUE:
+    phase_1:
+      TAI: [300, 320]
+      fire_priority:
+        RIFLE: 5
+        ANTI_TANK: 4
+        TANK: 3
+        ARTILLERY: 1
+        COMMAND_POST: 2
+      maneuver_objective: null
+    phase_2:
+      TAI: [300, 250]
+      fire_priority:
+        RIFLE: 5
+        ANTI_TANK: 4
+        TANK: 1
+        ARTILLERY: 3
+        COMMAND_POST: 2
+      maneuver_objective: null
+    phase_3:
+      TAI: [350, 300]
+      fire_priority:
+        RIFLE: 4
+        ANTI_TANK: 2
+        TANK: 1
+        ARTILLERY: 5
+        COMMAND_POST: 3
+      maneuver_objective: [[350, 300]]
+
+# Phase 전환 조건 (지휘소가 평가)
+phase_transitions:
+  friendly_artillery_lost_to_close_combat: 4   # 아군 포병 N대 이상 손실 → CLOSE_COMBAT
+  enemy_artillery_destroyed_to_phase_2: 4      # 적 포병 N대 이상 격파 → phase_2
+  enemy_tanks_destroyed_to_close_combat: 2     # 적 전차 N대 이상 격파 → CLOSE_COMBAT
+
+# ============================================================
+# 초기 배치 (Vuhledar 지도 기준)
+# RED (공격, 남측에서 북상) / BLUE (방어, 시가지 NW + 동측 도로)
+# ============================================================
 initial_positions:
   RED:
-    ARTILLERY: [[50,370],[50,425],[75,420],[150,440],[75,440],[100,425]]
-    DRONE: [[450,350]]
-    TANK: [[400,350],[350,350],[300,270],[290,260]]
-    ANTI_TANK: [[350,250],[350,250],[400,300],[400,300],[475,220],[515,250]]
+    ARTILLERY: [[10,380],[25,410],[40,425],[60,400],[80,430],[20,440]]
+    DRONE: [[150,300]]
+    TANK: [[50,285],[80,290],[110,295],[40,280]]
+    ANTI_TANK: [[30,320],[55,330],[90,325],[120,335],[70,340],[40,350]]
     RIFLE: [
-      [325,275],[300,240],[310,250],[350,300],[360,330],[370,320],[355,280],[300,300],
-    [400,300],[380,300],[390,300],[415,315],[420,320],[390,330],[370,290],[380,310],
-    [525,210],[515,230],[535,200],[500,220],[480,220],[490,210],[490,210],[500,220]
+      [20,310],[35,320],[50,330],[75,335],[100,330],[130,340],
+      [160,330],[180,340],[60,360],[90,370],[120,360],[150,370],
+      [180,380],[40,380],[70,390],[100,395],[140,395],[170,400],
+      [50,410],[90,420],[130,420],[170,420],[80,440],[150,440]
     ]
-    COMMAND_POST: [[350,300]]
+    COMMAND_POST: [[50,420]]
   BLUE:
-    ARTILLERY: [[750,350],[700,357],[750,400],[720,410],[670,380],[635,425]]
-    DRONE: [[300,425]]
-    TANK: [[700,70],[715,120],[670,90],[730,95]]
-    ANTI_TANK: [[450,75],[475,95],[650,155],[645,150],[655,185],[650,185]]
+    ARTILLERY: [[10,30],[25,25],[40,40],[60,20],[80,35],[100,45]]
+    DRONE: [[400,100]]
+    TANK: [[400,28],[500,30],[600,32],[700,30]]
+    ANTI_TANK: [[450,30],[550,35],[650,32],[660,200],[660,230],[670,250]]
     RIFLE: [
-      [465,55],[470,65],[455,80],[470,75],[430,60],[430,70],[455,65],[460,75],
-
-      [630,210],[650,210],[660,190],[660,180],[660,200],[640,170],[640,190],[630,200],
-      [650,170],[660,180],[670,170],[640,150],[630,160],[630,160],[640,170],[650,180]
+      [110,30],[130,35],[160,30],[200,32],[240,30],[280,33],
+      [320,30],[360,32],[400,35],[440,30],[480,30],[520,33],
+      [560,30],[600,30],[640,32],[680,30],[720,33],[760,30],
+      [630,200],[640,210],[650,220],[665,210],[680,220],[670,180]
     ]
-    COMMAND_POST: [[670,175]]
+    COMMAND_POST: [[50,30]]
 
+# 유닛 수량
 num_artillery_red: 6
 num_artillery_blue: 6
 num_drone_red: 1
@@ -46,10 +210,3 @@ num_infantry_red: 24
 num_infantry_blue: 24
 num_cp_red: 1
 num_cp_blue: 1
-
-# Simulation Settings
-simulation:
-  pixel_to_meter_scale: 5.0  # 1 pixel = 5 meters
-  lethal_radius: 30.0  # Artillery lethal radius in meters
-  mountain_detect_prob: 0.2  # Detection probability in mountain terrain
-  drone_elevation: 200.0  # Drone elevation in meters

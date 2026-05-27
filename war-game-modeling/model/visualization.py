@@ -42,6 +42,28 @@ unit_sound_map = {
 with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
+
+def _load_korean_font(size: int) -> pygame.font.Font:
+    """한글 글리프가 포함된 폰트를 OS별로 찾아 로드.
+
+    Linux: Noto Sans CJK KR (Ubuntu 기본 패키지)
+    macOS / Windows fallback도 시도.
+    못 찾으면 pygame 기본 폰트 (한글 깨질 수 있음).
+    """
+    candidates = [
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+        '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+        '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
+        '/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf',
+        '/Library/Fonts/AppleSDGothicNeo.ttc',
+        'C:/Windows/Fonts/malgun.ttf',
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return pygame.font.Font(path, size)
+    return pygame.font.SysFont(None, size)
+
+
 class Visualizer:
     def __init__(self, width: int = 1600, height: int = 900, show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False, record_video: bool = False, output_path: str = "simulation.mp4"):
         pygame.init()
@@ -79,11 +101,11 @@ class Visualizer:
             'panel_bg': (255, 255, 255)    # 패널 배경색
         }
         
-        # 폰트 초기화
+        # 폰트 초기화 — 한글 깨짐 방지를 위해 Noto Sans CJK KR 등 한글 폰트 사용
         pygame.font.init()
-        self.font = pygame.font.SysFont('malgungothic', 12)
-        self.panel_font = pygame.font.SysFont('malgungothic', 16)
-        self.team_count_font = pygame.font.SysFont('malgungothic', 12)  # 팀 카운트용 작은 폰트 추가
+        self.font = _load_korean_font(12)
+        self.panel_font = _load_korean_font(16)
+        self.team_count_font = _load_korean_font(12)
         
         # 시뮬레이션 속도 조절
         self.update_interval = 1.0  # 1초마다 업데이트
@@ -109,7 +131,7 @@ class Visualizer:
         """한 프레임 그리기"""
         # 배경 이미지 그리기
         self.screen.blit(self.background, (0, 0))
-        
+
         # 오래된 이벤트 정리 (현재 시간보다 1초 이상 이전의 이벤트 제거)
         self.events = [event for event in self.events if current_time - event.time <= 1.0]
          

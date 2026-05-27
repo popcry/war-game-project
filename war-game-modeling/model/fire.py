@@ -15,27 +15,27 @@ with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
+_FIRE_CFG = config['fire']
+_LETHAL_RADIUS_PX = config['simulation']['lethal_radius_m'] / PIXEL_TO_METER_SCALE
 
 class Fire:
     def __init__(self):
         self.detect = Detect()
         self.terrain = Terrain()
 
-    
-
     def calculate_impact_point(self, target_position: Tuple[float, float], distance: float) -> Tuple[float, float]:
         """곡사화기의 탄착지점 계산
-        
+
         Args:
             target_position: 목표 지점 좌표
             distance: 사거리 (픽셀단위)
-            
+
         Returns:
             Tuple[float, float]: 탄착지점 좌표
         """
-        # 공산오차 계산
-        sigma_y = 0.02 * distance  # 사거리 공산오차
-        sigma_x = 0.01 * distance  # 편의 공산오차
+        # 공산오차 계산 — config에서 비율 읽음
+        sigma_y = _FIRE_CFG['artillery_sigma_range_pct'] * distance  # 사거리 공산오차
+        sigma_x = _FIRE_CFG['artillery_sigma_dev_pct'] * distance    # 편의 공산오차
         
         # 정규분포를 따르는 랜덤 오차 생성
         error_x = random.gauss(0, sigma_x)
@@ -68,7 +68,7 @@ class Fire:
             all_units: 모든 유닛 리스트
             current_time: 현재 시뮬레이션 시간
         """
-        lethal_radius = config['simulation']['lethal_radius'] / PIXEL_TO_METER_SCALE
+        lethal_radius = _LETHAL_RADIUS_PX
         affected_units = []
         
         # 치사반경 내의 모든 유닛에 대해 피해 적용
@@ -154,42 +154,46 @@ class Fire:
             return "ES" if not is_moving else "EM"
 
     def finding_target(self, attacker: Unit, all_units: List[Unit], command: Command) -> Optional[int]:
-        """사격 가능한 표적 중에서 목표 선정"""
+        """사격 가능한 표적 중에서 목표 선정.
+
+        모든 플랫폼이 fire_priority를 따라 우선순위 분류 후 표적 결정:
+        - 포병(곡사): 최우선 그룹 내 랜덤 선택
+        - 직사화기: 최우선 그룹 내 거리가 가까운 표적
+        """
         if not attacker.eligible_target_list:
             return None
-            
-        # Artillery는 command.fire_priority를 고려
-        if attacker.unit_type == UnitType.ARTILLERY:
-            # 우선순위별로 표적 분류
-            priority_targets = {}
-            for target_id in attacker.eligible_target_list:
-                target = next((u for u in all_units if u.id == target_id), None)
-                if target:  
-                    priority = command.fire_priority.get(target.unit_type, 0)
-                    if priority not in priority_targets:
-                        priority_targets[priority] = []
-                    priority_targets[priority].append(target_id)
-            
-            # 가장 낮은 우선순위의 표적들 중에서 랜덤 선택
-            if priority_targets:
-                lowest_priority = min(priority_targets.keys())
-                return random.choice(priority_targets[lowest_priority])
+
+        # 표적을 우선순위로 분류
+        priority_targets: Dict[int, List[int]] = {}
+        for target_id in attacker.eligible_target_list:
+            target = next((u for u in all_units if u.id == target_id), None)
+            if target is None:
+                continue
+            priority = command.fire_priority.get(target.unit_type, 0)
+            priority_targets.setdefault(priority, []).append(target_id)
+
+        if not priority_targets:
             return None
-        
-        # Artillery가 아닌 경우 거리가 가까운 표적 선정
-        else:
-            min_distance = float('inf')
-            selected_target = None
-            
-            for target_id in attacker.eligible_target_list:
-                target = next((u for u in all_units if u.id == target_id), None)
-                if target:  # eligible_target_list에는 이미 ALIVE와 M_KILL만 있음
-                    distance = calculate_distance(attacker, target)
-                    if distance < min_distance:
-                        min_distance = distance
-                        selected_target = target_id
-            
-            return selected_target
+
+        lowest_priority = min(priority_targets.keys())
+        candidates = priority_targets[lowest_priority]
+
+        # 포병은 랜덤 선택 (곡사 특성)
+        if attacker.unit_type == UnitType.ARTILLERY:
+            return random.choice(candidates)
+
+        # 직사화기는 최우선 그룹 내에서 거리가 가까운 표적 선정
+        min_distance = float('inf')
+        selected_target = None
+        for target_id in candidates:
+            target = next((u for u in all_units if u.id == target_id), None)
+            if target is None:
+                continue
+            distance = calculate_distance(attacker, target)
+            if distance < min_distance:
+                min_distance = distance
+                selected_target = target_id
+        return selected_target
 
     def fire(self, attacker: Unit, target: Unit, all_units: List[Unit], command: Command, current_time: float) -> Optional[Event]:
         """유닛의 사격 처리"""
@@ -207,7 +211,7 @@ class Fire:
             impact_point = self.calculate_impact_point(target.position, distance)
             
             # 치사반경 내 아군 확인
-            lethal_radius = 30.0 / PIXEL_TO_METER_SCALE # 치사반경 30m
+            lethal_radius = _LETHAL_RADIUS_PX  # config['simulation']['lethal_radius_m']
             friendly_units_in_radius = []
             
             for unit in all_units:
