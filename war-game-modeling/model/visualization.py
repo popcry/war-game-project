@@ -42,6 +42,22 @@ unit_sound_map = {
 with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
+
+def _load_korean_font(size: int) -> pygame.font.Font:
+    """한글 글리프가 포함된 폰트를 OS별로 찾아 로드 (없으면 기본 폰트)."""
+    candidates = [
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+        '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+        '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
+        '/Library/Fonts/AppleSDGothicNeo.ttc',
+        'C:/Windows/Fonts/malgun.ttf',
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return pygame.font.Font(path, size)
+    return pygame.font.SysFont(None, size)
+
+
 class Visualizer:
     def __init__(self, width: int = 1600, height: int = 900, show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False, record_video: bool = False, output_path: str = "simulation.mp4", money_tracker=None):
         pygame.init()
@@ -82,9 +98,9 @@ class Visualizer:
         
         # 폰트 초기화
         pygame.font.init()
-        self.font = pygame.font.SysFont('malgungothic', 12)
-        self.panel_font = pygame.font.SysFont('malgungothic', 16)
-        self.team_count_font = pygame.font.SysFont('malgungothic', 12)  # 팀 카운트용 작은 폰트 추가
+        self.font = _load_korean_font(12)
+        self.panel_font = _load_korean_font(16)
+        self.team_count_font = _load_korean_font(12)  # 팀 카운트용 작은 폰트
         
         # 시뮬레이션 속도 조절
         self.update_interval = 1.0  # 1초마다 업데이트

@@ -16,6 +16,7 @@ with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
+_FIRE_CFG = config['fire']
 
 class Fire:
     def __init__(self, money_tracker: Optional[MoneyTracker] = None):
@@ -31,21 +32,19 @@ class Fire:
         if self.money_tracker:
             self.money_tracker.record_fire(attacker)
 
-    
-
     def calculate_impact_point(self, target_position: Tuple[float, float], distance: float) -> Tuple[float, float]:
         """곡사화기의 탄착지점 계산
-        
+
         Args:
             target_position: 목표 지점 좌표
             distance: 사거리 (픽셀단위)
-            
+
         Returns:
             Tuple[float, float]: 탄착지점 좌표
         """
-        # 공산오차 계산
-        sigma_y = 0.02 * distance  # 사거리 공산오차
-        sigma_x = 0.01 * distance  # 편의 공산오차
+        # 공산오차 계산 — config에서 비율 읽음
+        sigma_y = _FIRE_CFG['artillery_sigma_range_pct'] * distance  # 사거리 공산오차
+        sigma_x = _FIRE_CFG['artillery_sigma_dev_pct'] * distance    # 편의 공산오차
         
         # 정규분포를 따르는 랜덤 오차 생성
         error_x = random.gauss(0, sigma_x)
@@ -225,7 +224,7 @@ class Fire:
             impact_point = self.calculate_impact_point(target.position, distance)
             
             # 치사반경 내 아군 확인
-            lethal_radius = 30.0 / PIXEL_TO_METER_SCALE # 치사반경 30m
+            lethal_radius = config['simulation']['lethal_radius'] / PIXEL_TO_METER_SCALE  # 치사반경
             friendly_units_in_radius = []
             
             for unit in all_units:

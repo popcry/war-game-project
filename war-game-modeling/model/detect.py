@@ -9,10 +9,12 @@ with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
+_DET_CFG = config['detection']
 class Detect:
     def __init__(self):
         self.terrain = Terrain()
         self.MOUNTAIN_DETECT_PROB = config['simulation']['mountain_detect_prob']  # 산악지형 탐지 확률
+        self.LOS_CHECK_INTERVAL_PX = _DET_CFG['los_check_interval_px']
 
     def check_los(self, observer: Unit, target: Unit) -> bool:
         """시야선(LOS) 확인"""
@@ -34,8 +36,8 @@ class Detect:
         # 두 유닛 사이의 거리 계산
         distance = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
         
-        # 10픽셀 간격으로 체크
-        check_interval = 10
+        # config에서 정의한 간격으로 LOS 샘플링
+        check_interval = self.LOS_CHECK_INTERVAL_PX
         num_checks = int(distance / check_interval)
         
         # 두 유닛 사이의 직선 경로를 체크

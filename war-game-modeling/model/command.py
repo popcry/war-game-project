@@ -3,6 +3,23 @@ from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
 from model.unit import UnitType, Team, Unit, Status
 from collections import deque
+import yaml
+
+with open('config.yaml', 'r') as f:
+    _CFG = yaml.safe_load(f)
+_PHASES_CFG = _CFG['phases']
+_PHASE_TR_CFG = _CFG['phase_transitions']
+
+
+def _parse_phase_cfg(team: 'Team', phase_key: str) -> dict:
+    """config의 phases.<TEAM>.<phase_key> 항목을 (TAI, fire_priority dict, maneuver) 튜플로 변환."""
+    raw = _PHASES_CFG[team.value][phase_key]
+    tai = tuple(raw['TAI'])
+    fp = {UnitType[name]: val for name, val in raw['fire_priority'].items()}
+    mo = raw['maneuver_objective']
+    if mo is not None:
+        mo = [tuple(p) for p in mo]
+    return {'TAI': tai, 'fire_priority': fp, 'maneuver_objective': mo}
 
 class LogHandler:
     _instance = None
@@ -48,98 +65,18 @@ class Command:
 
     @classmethod
     def create_phase_1_command(cls, team: Team):
-        if team == Team.RED:
-            return cls(
-                team=team,
-                phase=Phase.Deep_fires,
-                TAI=(650, 350),  # Red team's TAI
-                fire_priority={
-                    UnitType.RIFLE: 5,
-                    UnitType.ANTI_TANK: 4,
-                    UnitType.TANK: 3,
-                    UnitType.ARTILLERY: 1,
-                    UnitType.COMMAND_POST: 2
-                },
-                maneuver_objective=None
-            )
-        else:  # BLUE team
-            return cls(
-                team=team,
-                phase=Phase.Deep_fires,
-                TAI=(75, 400),  # Blue team's TAI
-                fire_priority={
-                    UnitType.RIFLE: 5,
-                    UnitType.ANTI_TANK: 4,
-                    UnitType.TANK: 3,
-                    UnitType.ARTILLERY: 1,
-                    UnitType.COMMAND_POST: 2
-                },
-                maneuver_objective=None
-            )
-    
+        spec = _parse_phase_cfg(team, 'phase_1')
+        return cls(team=team, phase=Phase.Deep_fires, **spec)
+
     @classmethod
     def create_phase_2_command(cls, team: Team):
-        if team == Team.RED:
-            return cls(
-                team=team,
-                phase=Phase.Degrade_enemy_forces,
-                TAI=(500, 150),  # Red team's TAI
-                fire_priority={
-                    UnitType.RIFLE: 5,
-                    UnitType.ANTI_TANK: 4,
-                    UnitType.TANK: 1,
-                    UnitType.ARTILLERY: 3,
-                    UnitType.COMMAND_POST: 2
-                },
-                maneuver_objective=None
-            )
-        else:  # BLUE team
-            return cls(
-                team=team,
-                phase=Phase.Degrade_enemy_forces,
-                TAI=(300, 250),  # Blue team's TAI
-                fire_priority={
-                    UnitType.RIFLE: 5,
-                    UnitType.ANTI_TANK: 4,
-                    UnitType.TANK: 1,
-                    UnitType.ARTILLERY: 3,
-                    UnitType.COMMAND_POST: 2
-                },
-                maneuver_objective=None
-            )
-    
+        spec = _parse_phase_cfg(team, 'phase_2')
+        return cls(team=team, phase=Phase.Degrade_enemy_forces, **spec)
+
     @classmethod
     def create_phase_3_command(cls, team: Team):
-        if team == Team.RED:
-            return cls(
-                team=team,
-                phase=Phase.CLOSE_COMBAT,
-                TAI=(500, 150),  # Red team's TAI
-                fire_priority={
-                    UnitType.RIFLE: 4,
-                    UnitType.ANTI_TANK: 2,
-                    UnitType.TANK: 1,
-                    UnitType.ARTILLERY: 5,
-                    UnitType.COMMAND_POST: 3
-                },
-                maneuver_objective=None
-            )
-        else:  # BLUE team
-            return cls(
-                team=team,
-                phase=Phase.CLOSE_COMBAT,
-                TAI=(350, 300),  # Blue team's TAI
-                fire_priority={
-                    UnitType.RIFLE: 4,
-                    UnitType.ANTI_TANK: 2,
-                    UnitType.TANK: 1,
-                    UnitType.ARTILLERY: 5,
-                    UnitType.COMMAND_POST: 3
-                },
-                maneuver_objective=[
-                    (350, 300)  # Blue team's objective
-                ]
-            )
+        spec = _parse_phase_cfg(team, 'phase_3')
+        return cls(team=team, phase=Phase.CLOSE_COMBAT, **spec)
 
     def _log_phase_change(self) -> None:
         """작전단계 변경 시 로그를 남김"""
@@ -176,36 +113,43 @@ class Command:
             
         # 지휘소가 살아있거나 경미한 피해를 입은 경우
         if command_post.status in [Status.ALIVE, Status.MINOR, Status.M_KILL]:
-            # 아군 포병 4대 이상 파괴되면 CLOSE_COMBAT으로
-            destroyed_friendly_artillery = sum(1 for unit in all_units 
-                                            if unit.team == self.team 
-                                            and unit.unit_type == UnitType.ARTILLERY 
-                                            and unit.status not in [Status.ALIVE, Status.MINOR, Status.M_KILL])
-            if destroyed_friendly_artillery >= 4:
+            functional = [Status.ALIVE, Status.MINOR, Status.M_KILL]
+
+            # 아군 포병 N대 이상 파괴되면 CLOSE_COMBAT (임계값 config)
+            destroyed_friendly_artillery = sum(
+                1 for unit in all_units
+                if unit.team == self.team
+                and unit.unit_type == UnitType.ARTILLERY
+                and unit.status not in functional
+            )
+            if destroyed_friendly_artillery >= _PHASE_TR_CFG['friendly_artillery_lost_to_close_combat']:
                 self.next_phase = Phase.CLOSE_COMBAT
                 return True
-                
-            # 현재 단계에 따라 다음 단계로 진행할지 결정
+
             if self.phase == Phase.Deep_fires:
-                # 적 포병 4대 이상 파괴되면 Degrade_enemy_forces로
-                destroyed_artillery = sum(1 for unit in all_units 
-                                       if unit.team != self.team 
-                                       and unit.unit_type == UnitType.ARTILLERY 
-                                       and unit.status not in [Status.ALIVE, Status.MINOR, Status.M_KILL])
-                if destroyed_artillery >= 4:
+                # 적 포병 N대 이상 파괴되면 phase_2
+                destroyed_artillery = sum(
+                    1 for unit in all_units
+                    if unit.team != self.team
+                    and unit.unit_type == UnitType.ARTILLERY
+                    and unit.status not in functional
+                )
+                if destroyed_artillery >= _PHASE_TR_CFG['enemy_artillery_destroyed_to_phase_2']:
                     self.next_phase = Phase.Degrade_enemy_forces
                     return True
-                    
+
             elif self.phase == Phase.Degrade_enemy_forces:
-                # 적 전차 2대 이상 파괴되면 CLOSE_COMBAT으로
-                destroyed_enemy_tanks = sum(1 for unit in all_units 
-                                         if unit.team != self.team 
-                                         and unit.unit_type == UnitType.TANK 
-                                         and unit.status not in [Status.ALIVE, Status.MINOR, Status.M_KILL])
-                if destroyed_enemy_tanks >= 2:
+                # 적 전차 N대 이상 파괴되면 CLOSE_COMBAT
+                destroyed_enemy_tanks = sum(
+                    1 for unit in all_units
+                    if unit.team != self.team
+                    and unit.unit_type == UnitType.TANK
+                    and unit.status not in functional
+                )
+                if destroyed_enemy_tanks >= _PHASE_TR_CFG['enemy_tanks_destroyed_to_close_combat']:
                     self.next_phase = Phase.CLOSE_COMBAT
                     return True
-        
+
         return False
 
     def _update_phase(self) -> None:

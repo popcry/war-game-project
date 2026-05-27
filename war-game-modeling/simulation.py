@@ -10,6 +10,8 @@ from model.detect import Detect
 from model.movement import Movement
 from model.command import Command, Phase
 from model.money import MoneyTracker
+from model.terrain import Terrain
+import csv
 import heapq
 import argparse
 import os
@@ -18,13 +20,13 @@ import stat
 
 
 def _remove_readonly(func, path, exc_info):
-    """Clear Windows read-only bits and retry a failed remove operation."""
+    """Windows read-only 비트를 해제하고 삭제를 재시도."""
     os.chmod(path, stat.S_IWRITE | stat.S_IREAD | stat.S_IEXEC)
     func(path)
 
 
 def _reset_directory(path: str) -> None:
-    """Remove and recreate a directory, including read-only Windows folders."""
+    """디렉토리를 삭제 후 재생성 (Windows read-only 폴더 포함)."""
     if os.path.isdir(path):
         shutil.rmtree(path, onerror=_remove_readonly)
     elif os.path.exists(path):
@@ -34,15 +36,69 @@ def _reset_directory(path: str) -> None:
 
 
 def _safe_rmtree(path: str) -> None:
-    """Best-effort recursive delete for generated output directories."""
+    """생성 디렉토리에 대한 best-effort 재귀 삭제."""
     if os.path.exists(path):
         shutil.rmtree(path, onerror=_remove_readonly)
 
+UNIT_TYPE_NAME = {
+    UnitType.DRONE: "drone",
+    UnitType.SELF_DEST_DRONE: "self_dest_drone",
+    UnitType.TANK: "tank",
+    UnitType.RIFLE: "infantry",
+    UnitType.ARTILLERY: "artillery",
+    UnitType.ANTI_TANK: "antitank",
+    UnitType.COMMAND_POST: "command_post",
+}
+
+UNIT_TYPE_ABBR = {
+    UnitType.DRONE: "drn",
+    UnitType.SELF_DEST_DRONE: "sdd",
+    UnitType.TANK: "tnk",
+    UnitType.RIFLE: "inf",
+    UnitType.ARTILLERY: "art",
+    UnitType.ANTI_TANK: "at",
+    UnitType.COMMAND_POST: "cp",
+}
+
+# (정보용) 차량·보병 상태 체계가 다릅니다:
+#   - TANK/ARTILLERY/DRONE: alive / m_kill / f_kill / mf_kill / k_kill
+#   - RIFLE/ANTI_TANK/COMMAND_POST: alive / minor / serious / critical / fatal
+DEAD_STATUSES = {Status.K_KILL, Status.FATAL}
+
+COMBAT_UNIT_TYPES = {
+    UnitType.RIFLE,
+    UnitType.ANTI_TANK,
+    UnitType.TANK,
+    UnitType.ARTILLERY,
+}
+
+
+# unit.status(9종) → kill 분류(5종) 매핑
+#   차량(TANK/ARTILLERY/DRONE)은 kill 타입을 그대로 사용
+#   보병(RIFLE/ANTI_TANK/COMMAND_POST)은 부상 단계를 kill 타입으로 환산
+#     MINOR(경상)=전투가능 → alive,  SERIOUS·CRITICAL(중상·중증)=이동·사격불가 → mf_kill,  FATAL(사망) → k_kill
+_STATUS_TO_KILL = {
+    Status.ALIVE: "alive",
+    Status.M_KILL: "m_kill",
+    Status.F_KILL: "f_kill",
+    Status.MF_KILL: "mf_kill",
+    Status.K_KILL: "k_kill",
+    Status.MINOR: "alive",
+    Status.SERIOUS: "mf_kill",
+    Status.CRITICAL: "mf_kill",
+    Status.FATAL: "k_kill",
+}
+
+
+def _kill_status(unit) -> str:
+    """유닛 상태를 kill 분류(alive / m_kill / f_kill / mf_kill / k_kill)로 변환."""
+    return _STATUS_TO_KILL[unit.status]
+
 
 class Simulation:
-    def __init__(self, config_file: str, time_scale: float = 1.0, sim_speed: float = 1.0, 
+    def __init__(self, config_file: str, time_scale: float = 1.0, sim_speed: float = 1.0,
                  show_detection: bool = False, show_eligible_targets: bool = False, show_fire: bool = False,
-                 record_video: Optional[bool] = None):
+                 headless: bool = False, record_video: Optional[bool] = None):
         """시뮬레이션 초기화"""
         self.config = self._load_config(config_file)
         self.units = []
@@ -50,45 +106,79 @@ class Simulation:
         self.current_time = 0.0
         self.time_scale = time_scale
         self.sim_speed = sim_speed
+        self.headless = headless
 
         self.show_detection = show_detection
         self.show_eligible_targets = show_eligible_targets
         self.show_fire = show_fire
-        
-        # 비디오 설정
+
+        # 비디오 설정 — config 기본값, record_video 인자로 오버라이드 가능
+        # (headless에서도 frames 저장 후 ffmpeg 합성 가능; SDL_VIDEODRIVER=dummy 렌더링)
         configured_record_video = self.config.get('video', {}).get('enabled', False)
         self.record_video = configured_record_video if record_video is None else record_video
         self.output_path = self.config.get('video', {}).get('output_path', 'simulation.mp4')
         self.video_fps = self.config.get('video', {}).get('fps', 30)
+
+        # CSV 로깅 설정
+        csv_cfg = self.config.get('csv', {})
+        self.csv_enabled = csv_cfg.get('enabled', True)
+        self.csv_path = csv_cfg.get('output_path', 'results/simulation.csv')
+        self.csv_rows: List[dict] = []
+        self.agent_id_map: Dict[int, str] = {}
+        self.pixel_to_meter = self.config['simulation']['pixel_to_meter_scale']
+        self.drone_elevation_m = self.config['simulation']['drone_elevation']
+        self.terrain = Terrain()
         
-        print(f"Video recording: {'enabled' if self.record_video else 'disabled'}")  # 로그 추가
+        print(f"Headless mode: {'enabled' if self.headless else 'disabled'}")
+        print(f"Video recording: {'enabled' if self.record_video else 'disabled'}")
         if self.record_video:
-            print(f"Output path: {self.output_path}")  # 로그 추가
-            print(f"Video FPS: {self.video_fps}")  # 로그 추가
-        
+            print(f"Output path: {self.output_path}")
+            print(f"Video FPS: {self.video_fps}")
+
         # 시뮬레이션 시간 설정
         self.max_time = self.config.get('max_time', 100.0)
-        
+
+        # 맵 크기 — config 기반
+        self.map_width = self.config['simulation']['map_width_px']
+        self.map_height = self.config['simulation']['map_height_px']
+
         # 모델 컴포넌트 초기화
         self.money_tracker = MoneyTracker(self.config.get('money', {}))
         self.movement = Movement()
         self.fire = Fire(self.money_tracker)
         self.detect = Detect()
-        
+
         # 명령 초기화
         self.commands = {
             Team.RED: Command.create_phase_1_command(Team.RED),
             Team.BLUE: Command.create_phase_1_command(Team.BLUE)
         }
-        
+
         # 시각화 초기화
-        self.visualizer = Visualizer(800, 450, show_detection=self.show_detection, show_eligible_targets=self.show_eligible_targets, show_fire=self.show_fire, record_video=self.record_video, output_path=self.output_path, money_tracker=self.money_tracker)
-        self.visualizer.fire = self.fire  # Fire 객체 공유
-        self.visualizer.commands = self.commands  # Command 정보 공유
+        # - headless 아닐 때: 항상 초기화 (윈도우 표시 + 옵션상 frames 저장)
+        # - headless + record_video: frames 저장 위해서만 초기화 (윈도우는 SDL dummy로 숨김)
+        # - headless + 비디오 없음: 완전 스킵 (가장 빠름)
+        if not self.headless or self.record_video:
+            self.visualizer = Visualizer(
+                self.map_width, self.map_height,
+                show_detection=self.show_detection,
+                show_eligible_targets=self.show_eligible_targets,
+                show_fire=self.show_fire,
+                record_video=self.record_video,
+                output_path=self.output_path,
+                money_tracker=self.money_tracker,
+            )
+            self.visualizer.fire = self.fire
+            self.visualizer.commands = self.commands
+        else:
+            self.visualizer = None
         
         # 초기 유닛 로드
         self._load_initial_units()
-        
+
+        # agent_id 매핑 생성 (예: "blue_drn_1")
+        self._build_agent_id_map()
+
         # 초기 이벤트 스케줄링
         self._schedule_initial_events()
 
@@ -127,9 +217,8 @@ class Simulation:
         create_units_for_team(Team.RED, UnitType.ANTI_TANK, self.config['initial_positions']['RED']['ANTI_TANK'], self.config['num_at_red'])
         create_units_for_team(Team.RED, UnitType.RIFLE, self.config['initial_positions']['RED']['RIFLE'], self.config['num_infantry_red'])
         create_units_for_team(Team.RED, UnitType.COMMAND_POST, self.config['initial_positions']['RED']['COMMAND_POST'], self.config['num_cp_red'])
-        create_units_for_team(Team.RED, UnitType.SELF_DEST_DRONE, self.config['initial_positions']['RED']['SELF_DEST_DRONE'], self.config['num_self_dest_drone_red']) # 자폭 드론 추가
+        create_units_for_team(Team.RED, UnitType.SELF_DEST_DRONE, self.config['initial_positions']['RED']['SELF_DEST_DRONE'], self.config['num_self_dest_drone_red'])  # 자폭 드론
 
-        
         # BLUE 팀 유닛 생성
         create_units_for_team(Team.BLUE, UnitType.ARTILLERY, self.config['initial_positions']['BLUE']['ARTILLERY'], self.config['num_artillery_blue'])
         create_units_for_team(Team.BLUE, UnitType.DRONE, self.config['initial_positions']['BLUE']['DRONE'], self.config['num_drone_blue'])
@@ -137,7 +226,109 @@ class Simulation:
         create_units_for_team(Team.BLUE, UnitType.ANTI_TANK, self.config['initial_positions']['BLUE']['ANTI_TANK'], self.config['num_at_blue'])
         create_units_for_team(Team.BLUE, UnitType.RIFLE, self.config['initial_positions']['BLUE']['RIFLE'], self.config['num_infantry_blue'])
         create_units_for_team(Team.BLUE, UnitType.COMMAND_POST, self.config['initial_positions']['BLUE']['COMMAND_POST'], self.config['num_cp_blue'])
-        create_units_for_team(Team.BLUE, UnitType.SELF_DEST_DRONE, self.config['initial_positions']['BLUE']['SELF_DEST_DRONE'], self.config['num_self_dest_drone_blue']) # 자폭 드론 추가
+        create_units_for_team(Team.BLUE, UnitType.SELF_DEST_DRONE, self.config['initial_positions']['BLUE']['SELF_DEST_DRONE'], self.config['num_self_dest_drone_blue'])  # 자폭 드론
+
+    def _build_agent_id_map(self):
+        """유닛 id → 'team_abbr_idx' 형태의 agent_id 매핑 생성"""
+        counters: Dict[tuple, int] = {}
+        for unit in self.units:
+            key = (unit.team, unit.unit_type)
+            counters[key] = counters.get(key, 0) + 1
+            team_str = unit.team.value.lower()
+            abbr = UNIT_TYPE_ABBR[unit.unit_type]
+            self.agent_id_map[unit.id] = f"{team_str}_{abbr}_{counters[key]}"
+
+    def _record_tick(self, current_events: List[Event]):
+        """현재 시점 모든 유닛의 상태 + 이번 tick에 발생한 이벤트를 CSV 버퍼에 기록"""
+        if not self.csv_enabled:
+            return
+
+        # 이번 tick에 발생한 FIRE 이벤트 수집 (source_id → target_id)
+        fire_events: Dict[int, int] = {}
+        for ev in current_events:
+            if ev.event_type == EventType.FIRE:
+                fire_events[ev.source_id] = ev.target_id
+
+        for unit in self.units:
+            x_m = unit.position[0] * self.pixel_to_meter
+            z_m = unit.position[1] * self.pixel_to_meter
+
+            if unit.unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
+                y_m = self.drone_elevation_m
+            else:
+                elev_pixels = self.terrain.get_elevation(
+                    (int(unit.position[0]), int(unit.position[1]))
+                )
+                y_m = elev_pixels * self.pixel_to_meter
+
+            # kill 분류: alive / m_kill / f_kill / mf_kill / k_kill
+            status_str = _kill_status(unit)
+
+            event_str = ""
+            target_str = ""
+            if unit.id in fire_events:
+                event_str = "fire"
+                tgt_id = fire_events[unit.id]
+                target_str = self.agent_id_map.get(tgt_id, "")
+
+            self.csv_rows.append({
+                "timestamp": round(self.current_time, 3),
+                "team": unit.team.value.lower(),
+                "agent_type": UNIT_TYPE_NAME[unit.unit_type],
+                "agent_id": self.agent_id_map[unit.id],
+                "x": round(x_m, 2),
+                "y": round(y_m, 2),
+                "z": round(z_m, 2),
+                "yaw": round(unit.yaw, 4),
+                "alive": status_str,
+                "event": event_str,
+                "target": target_str,
+            })
+
+    def _check_termination(self) -> Optional[str]:
+        """전투 종료 여부 판단.
+
+        Returns:
+            "RED" / "BLUE" / "DRAW" — 종료 조건 충족
+            None — 계속 진행
+        전투 가능 유닛(소총/대전차/전차/포병) 중 사격 가능한 유닛이 0인 팀은 패배.
+        """
+        red_combat = sum(
+            1 for u in self.units
+            if u.team == Team.RED
+            and u.unit_type in COMBAT_UNIT_TYPES
+            and u.can_fire()
+        )
+        blue_combat = sum(
+            1 for u in self.units
+            if u.team == Team.BLUE
+            and u.unit_type in COMBAT_UNIT_TYPES
+            and u.can_fire()
+        )
+        if red_combat == 0 and blue_combat == 0:
+            return "DRAW"
+        if red_combat == 0:
+            return "BLUE"
+        if blue_combat == 0:
+            return "RED"
+        return None
+
+    def _save_csv(self):
+        """버퍼된 CSV 행을 파일로 저장"""
+        if not self.csv_enabled or not self.csv_rows:
+            return
+
+        out_dir = os.path.dirname(self.csv_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+
+        fieldnames = ["timestamp", "team", "agent_type", "agent_id",
+                      "x", "y", "z", "yaw", "alive", "event", "target"]
+        with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(self.csv_rows)
+        print(f"CSV saved: {self.csv_path} ({len(self.csv_rows)} rows)")
 
     def _get_command_for_team(self, team: Team) -> Command:
         """팀에 대한 명령 반환"""
@@ -157,8 +348,8 @@ class Simulation:
             command = self._get_command_for_team(unit.team)
             # 이동 이벤트 스케줄링
             if unit.can_move():
-                # 드론은 TAI로 이동, 다른 유닛은 maneuver_objective가 있을 때만 이동
-                if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE] or command.maneuver_objective is not None:
+                # 드론·자폭드론은 TAI로 이동, 그 외엔 maneuver_objective가 있을 때만 이동
+                if unit.unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE) or command.maneuver_objective is not None:
                     event = self.movement.move(unit, command, self.current_time, self.units)
                     if event:
                         heapq.heappush(self.events, event)
@@ -204,25 +395,26 @@ class Simulation:
         last_visualization_time = 0.0
         visualization_interval = 1 / self.time_scale  # Match simulation speed with visualization
 
-        # 프레임 디렉토리 초기화
+        # 프레임 디렉토리 초기화 (Windows read-only 폴더 안전 처리)
         if self.record_video:
             _reset_directory(self.visualizer.frame_dir)
 
 
         while self.current_time < max_time:
-            # pygame 이벤트 처리
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.visualizer.close()
-                    return 
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        self.visualizer.paused = not self.visualizer.paused
+            # pygame 이벤트 처리 (headless가 아닐 때만)
+            if not self.headless:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self._save_csv()
+                        self.visualizer.close()
+                        return
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_SPACE:
+                            self.visualizer.paused = not self.visualizer.paused
 
-
-            if self.visualizer.paused:
-                self.visualizer.show_pause_screen()
-                continue
+                if self.visualizer.paused:
+                    self.visualizer.show_pause_screen()
+                    continue
 
             # 현재 시간에 발생할 모든 이벤트 수집
             current_events = []
@@ -271,47 +463,71 @@ class Simulation:
                         unit.update_action(Action.FIRE)
                         heapq.heappush(self.events, fire_event)
                 
-                # (b) 이동 이벤트 예약
-                if unit.unit_type == UnitType.TANK: #Tank는 이동사격 가능
+                # (b) 이동 이벤트 예약 — objective(이동 목표)가 있을 때만 이동
+                move_event = None
+                if unit.unit_type == UnitType.TANK:  # Tank는 이동사격 가능
                     if unit.objective:
                         move_event = self.movement.move(unit, command, self.current_time, self.units)
-                    if move_event:
-                        heapq.heappush(self.events, move_event)
-                elif unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE] or unit.action != Action.FIRE and unit.objective: # 드론은 TAI로 이동, 다른 유닛은 사격 중이 아닐 때만 이동
+                elif unit.action != Action.FIRE and unit.objective:
                     move_event = self.movement.move(unit, command, self.current_time, self.units)
-                    if move_event:
-                        heapq.heappush(self.events, move_event)
+                if move_event:
+                    heapq.heappush(self.events, move_event)
 
-            # 시각화 업데이트 (일정 간격으로만)
-            if self.current_time - last_visualization_time >= visualization_interval:
+            # CSV 기록 (매 tick 모든 유닛 상태 + 이번 tick의 FIRE 이벤트)
+            self._record_tick(current_events)
+
+            # 조기 종료 검사 — 한 팀의 전투 가능 유닛이 0이 되면 종료
+            winner = self._check_termination()
+            if winner is not None:
+                print(f"Simulation ended at t={self.current_time:.1f}s — winner: {winner}")
+                break
+
+            # 시각화 업데이트
+            # - headless + record_video: 화면 표시는 없지만 draw_frame으로 frames 저장 (sleep 없이 빠르게)
+            # - headless + 비디오 없음: 완전 스킵
+            # - 비-headless: 화면 표시 + 옵션상 frames 저장 + 실시간 sleep
+            should_render = (
+                self.visualizer is not None
+                and self.current_time - last_visualization_time >= visualization_interval
+            )
+            if should_render:
                 self.visualizer.current_time = self.current_time
                 self.visualizer.last_frame_time = last_visualization_time
-                self.visualizer.events = current_events  # 현재 시간의 이벤트들을 전달
+                self.visualizer.events = current_events
                 self.visualizer.draw_frame(self.units, self.current_time)
                 last_visualization_time = self.current_time
-                time.sleep(visualization_interval)
+                if not self.headless:
+                    time.sleep(visualization_interval)
 
             # 시간 증가
             self.current_time += self.sim_speed
 
-            
+
         # 시뮬레이션 종료 후 마지막 상태 표시
-        self.visualizer.current_time = self.current_time
-        self.visualizer.draw_frame(self.units, self.current_time)
-        
+        if not self.headless:
+            self.visualizer.current_time = self.current_time
+            self.visualizer.draw_frame(self.units, self.current_time)
+
+        # CSV 저장
+        self._save_csv()
+
         # 비디오 녹화가 활성화된 경우 비디오 생성
         if self.record_video:
             print("Simulation ended, creating video...")
             self.visualizer.create_video(self.output_path, self.video_fps)
-            # 비디오 생성 후 프레임 디렉토리 정리
+            # 비디오 생성 후 프레임 디렉토리 정리 (Windows read-only 안전 처리)
             _safe_rmtree(self.visualizer.frame_dir)
 
         self.print_money_summary()
         if not hold_open:
-            self.visualizer.close()
+            if self.visualizer is not None:
+                self.visualizer.close()
             return
-        
-        # 창 유지
+
+        # 창 유지 — headless에서는 즉시 종료
+        if self.headless:
+            return
+
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -331,16 +547,18 @@ if __name__ == "__main__":
     parser.add_argument('--max-time', type=float, default=None, help='Override max simulation time')
     parser.add_argument('--no-hold', action='store_true', help='Close the simulation window at the end')
     parser.add_argument('--no-video', action='store_true', help='Disable video recording for this run')
+    parser.add_argument('--headless', action='store_true', help='Disable visualization & real-time pacing (CSV-only fast mode)')
 
     args = parser.parse_args()
-    
+
     simulation = Simulation(
-        "config.yaml",  # 기본 설정 파일 사용
+        "config.yaml",
         time_scale=args.time_scale,
         show_detection=(args.detection == 'T'),
         show_eligible_targets=(args.eligible_TL == 'T'),
         show_fire=(args.fire == 'T'),
         sim_speed=args.sim_speed,
-        record_video=False if args.no_video else None
+        headless=args.headless,
+        record_video=False if args.no_video else None,
     )
     simulation.run_simulation(max_time=args.max_time, hold_open=not args.no_hold)

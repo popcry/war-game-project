@@ -1,14 +1,136 @@
+# ============================================================
+# War-game simulation config
+# Merge_trench_dest(참호·자폭드론 + layered terrain) + dh 인프라(CSV/headless/조기종료/config화)
+# 모든 하이퍼파라미터를 이 파일에서 관리합니다.
+# ============================================================
 
 max_time: 3600
 
-# Video settings
+# --- 비디오 / CSV 출력 ---
 video:
   enabled: true
   output_path: "results/simulation.mp4"
   fps: 10
 
+csv:
+  enabled: true
+  output_path: "results/simulation.csv"
+
 distance_rescale: 1
 
+# --- 시뮬레이션 코어 ---
+simulation:
+  pixel_to_meter_scale: 5.0   # 1 pixel = 5 meters
+  map_width_px: 800
+  map_height_px: 450
+  lethal_radius: 30.0         # 포병 치사반경 (m)
+  mountain_detect_prob: 0.2   # 산악 지형 탐지 확률
+  drone_elevation: 200.0      # 드론 비행 고도 (m)
+
+# --- 탐지 / LOS ---
+detection:
+  los_check_interval_px: 10   # 두 유닛 사이 LOS 샘플 간격 (픽셀)
+
+# --- 사격 ---
+fire:
+  artillery_sigma_range_pct: 0.02   # 포병 사거리 공산오차
+  artillery_sigma_dev_pct: 0.01     # 포병 편의 공산오차
+
+# --- 이동 ---
+movement:
+  min_distance_to_objective_m: 50   # 목표 지점 도달 판정 거리
+  objective_jitter_px: 100          # maneuver_objective ±랜덤 분산
+
+# --- 드론 정찰 ---
+drone:
+  grid_cell_size_m: 250             # 3×3 격자 한 칸 크기 (m)
+  pattern_change_time_s: 60.0       # 다음 격자로 옮기는 주기 (초)
+
+# --- 유닛별 능력치 ---
+# fire_interval: [a,b]→uniform(a,b),  [a,b,c]→triangular(low,high,mode),  null→사격 안 함
+units:
+  RIFLE:
+    detect_range_m: 1000
+    detectability: 0.8
+    weapon_range_m: 400
+    speed_kmh: 7
+    fire_interval: [2.0, 3.0]
+  ANTI_TANK:
+    detect_range_m: 3000
+    detectability: 0.8
+    weapon_range_m: 3000
+    speed_kmh: 5
+    fire_interval: [60.0, 180.0, 100.0]
+  TANK:
+    detect_range_m: 3000
+    detectability: 2.0
+    weapon_range_m: 3000
+    speed_kmh: 13
+    fire_interval: [5.0, 10.0, 6.0]
+  ARTILLERY:
+    detect_range_m: 1000
+    detectability: 2.0
+    weapon_range_m: 11300
+    speed_kmh: 0
+    fire_interval: [6.0, 20.0, 10.0]
+  DRONE:
+    detect_range_m: 2000
+    detectability: 0
+    weapon_range_m: 0
+    speed_kmh: 25
+    fire_interval: null
+  SELF_DEST_DRONE:
+    detect_range_m: 2000
+    detectability: 0
+    weapon_range_m: 400
+    speed_kmh: 25
+    fire_interval: [0.5, 1.0]
+  COMMAND_POST:
+    detect_range_m: 1000
+    detectability: 1.0
+    weapon_range_m: 400
+    speed_kmh: 5
+    fire_interval: [2.0, 3.0]
+
+# --- 작전단계 (Phase) ---
+# fire_priority 숫자가 낮을수록 포병 표적 우선순위 높음
+phases:
+  RED:
+    phase_1:
+      TAI: [650, 350]
+      fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
+      maneuver_objective: null
+    phase_2:
+      TAI: [500, 150]
+      fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
+      maneuver_objective: null
+    phase_3:
+      TAI: [500, 150]
+      fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
+      maneuver_objective: null
+  BLUE:
+    phase_1:
+      TAI: [75, 400]
+      fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
+      maneuver_objective: null
+    phase_2:
+      TAI: [300, 250]
+      fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
+      maneuver_objective: null
+    phase_3:
+      TAI: [350, 300]
+      fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
+      maneuver_objective: [[350, 300]]
+
+# Phase 전환 조건
+phase_transitions:
+  friendly_artillery_lost_to_close_combat: 4
+  enemy_artillery_destroyed_to_phase_2: 4
+  enemy_tanks_destroyed_to_close_combat: 2
+
+# ============================================================
+# 초기 배치 / 유닛 수량 (Merge_trench_dest 시나리오 유지)
+# ============================================================
 initial_positions:
   RED:
     ARTILLERY: [[50,370],[50,425],[75,420],[150,440],[75,440],[100,425]]
@@ -22,7 +144,6 @@ initial_positions:
     ]
     COMMAND_POST: [[350,300]]
     SELF_DEST_DRONE: [[450,350]]
-
   BLUE:
     ARTILLERY: [[750,350],[700,357],[750,400],[720,410],[670,380],[635,425]]
     DRONE: [[300,425]]
@@ -52,17 +173,8 @@ num_cp_blue: 1
 num_self_dest_drone_red: 1
 num_self_dest_drone_blue: 1
 
-
-# Simulation Settings
-simulation:
-  pixel_to_meter_scale: 5.0  # 1 pixel = 5 meters
-  lethal_radius: 30.0  # Artillery lethal radius in meters
-  mountain_detect_prob: 0.2  # Detection probability in mountain terrain
-  drone_elevation: 200.0  # Drone elevation in meters
-
-# Money tracking settings
-# fire_cost is charged to the team that fires.
-# damage cost is charged to the team that owns the damaged unit.
+# --- 자금 추적 (Money, Merge_trench_dest) ---
+# fire_cost: 사격한 팀에 부과 / damage: 피해 입은 유닛 소유 팀에 부과
 money:
   fire_cost:
     RIFLE: 10
@@ -72,7 +184,6 @@ money:
     DRONE: 0
     SELF_DEST_DRONE: 1000
     COMMAND_POST: 0
-
   unit_value:
     RIFLE: 100
     ANTI_TANK: 800
@@ -81,7 +192,6 @@ money:
     DRONE: 1500
     SELF_DEST_DRONE: 2000
     COMMAND_POST: 10000
-
   damage_ratio:
     ALIVE: 0.0
     MINOR: 0.1
@@ -93,9 +203,10 @@ money:
     MF_KILL: 0.7
     K_KILL: 1.0
 
-# Terrain layer settings
-# Layer priority in model/terrain.py:
-# river -> trench -> road -> mountain -> normal
+# ============================================================
+# Terrain layer settings (Merge_trench_dest)
+# Layer priority: river -> trench -> road -> mountain -> normal
+# ============================================================
 terrain:
   source: "vuhledar_layers"
   elevation_file: "database/vuhledar_elevation.csv"
@@ -103,31 +214,25 @@ terrain:
   road_type_file: "database/vuhledar_road_type.csv"
   trench_mask_file: "database/vuhledar_trench_mask.csv"
   trench_labels: [1, "1", "trench", "true", "t"]
-
-  # Mountain/normal classification uses the top 25% of DEM elevation.
   mountain_elevation_quantile: 0.75
-
   mobility:
     normal: 1.0
     mountain: 0.8
     river: 0.2
     road: 1.15
     trench: 0.7
-
   visibility:
     normal: 1.0
     mountain: 0.8
     river: 1.0
     road: 1.0
     trench: 0.5
-
   hit_probability:
     normal: 1.0
     mountain: 0.9
     river: 1.0
     road: 1.0
     trench: 0.6
-
   damage_probability:
     normal: 1.0
     mountain: 0.9
