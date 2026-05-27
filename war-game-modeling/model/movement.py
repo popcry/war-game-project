@@ -16,10 +16,13 @@ PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 _MOV_CFG = config['movement']
 _DRONE_CFG = config['drone']
 _UNITS_CFG = config['units']
+_SCALING = config['scaling']
+_SPEED_DIV = _SCALING['speed_scale_divisor']
+_SPEED_TMUL = _SCALING['speed_time_multiplier']
 
-# kmh → px/s 변환식 (원본 보존): kmh /5 *1000/3600 /pixel_to_meter_scale *30
+# kmh → px/s 변환식 (계수 config 기반): kmh /div *1000/3600 /pixel_to_meter_scale *tmul
 def _kmh_to_pxps(kmh: float) -> float:
-    return kmh / 5 * 1000 / 3600 / PIXEL_TO_METER_SCALE * 30
+    return kmh / _SPEED_DIV * 1000 / 3600 / PIXEL_TO_METER_SCALE * _SPEED_TMUL
 
 
 class Movement:
@@ -35,12 +38,8 @@ class Movement:
     # maneuver_objective에 더하는 ±랜덤 분산 (px)
     _OBJECTIVE_JITTER_PX = _MOV_CFG['objective_jitter_px']
 
-    # 드론 탐지 패턴 정의
-    DRONE_PATTERN = [
-        (1, 1), (1, 2), (1, 3),
-        (2, 3), (2, 2), (2, 1),
-        (3, 1), (3, 2), (3, 3)
-    ]
+    # 드론 탐지 패턴 (config 기반) — TAI 중심 3×3 격자 순회 순서
+    DRONE_PATTERN = [tuple(p) for p in _DRONE_CFG['pattern']]
     DRONE_OBJECTIVE_CHANGE_TIME = _DRONE_CFG['pattern_change_time_s']
     DRONE_GRID_SIZE = _DRONE_CFG['grid_cell_size_m'] / PIXEL_TO_METER_SCALE
 

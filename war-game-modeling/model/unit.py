@@ -14,8 +14,8 @@ with open('config.yaml', 'r') as f:
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 _UNITS_CFG = config['units']
 
-# 원본 스케일 보존: 포병 이외는 detect/weapon range에 한 번 더 /5 적용
-_NON_ARTILLERY_RANGE_EXTRA_DIV = 5
+# 원본 스케일 보존: 포병 이외는 detect/weapon range에 한 번 더 제수 적용 (config 기반)
+_NON_ARTILLERY_RANGE_EXTRA_DIV = config['scaling']['range_extra_div_non_artillery']
 
 class Team(Enum):
     RED = "RED"

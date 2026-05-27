@@ -1,19 +1,32 @@
 import pandas as pd
+import yaml
 from typing import Dict, Tuple, Union
 from model.unit import UnitType, Status
 
+# 명중/살상 확률 테이블을 config.yaml에서 로드 (구 database/*.csv 대체)
+with open('config.yaml', 'r') as _f:
+    _PROB_CFG = yaml.safe_load(_f)['probabilities']
+
+
+def _build_table(name: str) -> pd.DataFrame:
+    """config의 probabilities.<name> (columns + rows) 를 DataFrame으로 빌드.
+    pd.read_csv와 동일한 구조(RangeIndex + 명시 컬럼)를 만들어 기존 보간 로직을 그대로 사용."""
+    spec = _PROB_CFG[name]
+    return pd.DataFrame(spec['rows'], columns=spec['columns'])
+
+
 class ProbabilitySystem:
-    # Load probability data
-    rifle_at_commander_hit = pd.read_csv('database/rifle_at_commander_hit.csv')
+    # config에서 로드한 확률 테이블
+    rifle_at_commander_hit = _build_table('rifle_at_commander_hit')
     # 직사화기(라이플, 전차, 대전차, 지휘소)가 라이플, 대전차, 지휘소를 명중시킬 확률
 
-    rifle_at_commander_kh = pd.read_csv('database/rifle_at_commander_kh.csv')
+    rifle_at_commander_kh = _build_table('rifle_at_commander_kh')
     # 직사화기(라이플, 전차, 대전차, 지휘소)가 라이플, 대전차, 지휘소를 명중시켰을 때 상태별 확률
 
-    tank_artillery_hit = pd.read_csv('database/tank_artillery_hit.csv')
+    tank_artillery_hit = _build_table('tank_artillery_hit')
     # 직사화기(라이플, 전차, 대전차, 지휘소)가 탱크, 포병을 명중시킬 확률
 
-    tank_artillery_kh = pd.read_csv('database/tank_artillery_kh.csv')
+    tank_artillery_kh = _build_table('tank_artillery_kh')
     # 직사화기(라이플, 전차, 대전차, 지휘소)가 탱크, 포병을 명중시켰을 때 상태별 확률
 
     @classmethod

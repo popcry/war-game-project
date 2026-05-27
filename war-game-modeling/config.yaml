@@ -26,6 +26,13 @@ simulation:
   lethal_radius: 30.0         # 포병 치사반경 (m)
   mountain_detect_prob: 0.2   # 산악 지형 탐지 확률
   drone_elevation: 200.0      # 드론 비행 고도 (m)
+  combat_unit_types: [RIFLE, ANTI_TANK, TANK, ARTILLERY]   # 조기종료 판정 대상(전투유닛)
+
+# --- 스케일 보정 상수 (원본 코드 호환) ---
+scaling:
+  range_extra_div_non_artillery: 5   # 포병 외 detect/weapon range 추가 제수
+  speed_scale_divisor: 5             # km/h → px/s 변환 제수
+  speed_time_multiplier: 30          # km/h → px/s 변환 시간 계수
 
 # --- 탐지 / LOS ---
 detection:
@@ -35,6 +42,51 @@ detection:
 fire:
   artillery_sigma_range_pct: 0.02   # 포병 사거리 공산오차
   artillery_sigma_dev_pct: 0.01     # 포병 편의 공산오차
+  protected_terrain_types: [mountain, trench]   # 방호(차폐) 상태로 판정하는 지형
+
+# --- 명중/살상 확률 테이블 (구 database/*.csv) ---
+# 각 표는 columns + rows 로 정의되며, 코드에서 동일한 DataFrame으로 로드됩니다.
+# hit  : 거리 × 방호상태(ES/EM/DS/DM) → 명중확률
+# kh   : 피격 시 상태별 확률
+probabilities:
+  rifle_at_commander_hit:   # 직사화기 → 보병/대전차/지휘소 명중확률
+    columns: ["Distance (m)", "ES", "EM", "DS", "DM"]
+    rows:
+      - [0,   0.95, 0.9,  0.7,  0.6]
+      - [100, 0.85, 0.75, 0.55, 0.45]
+      - [200, 0.7,  0.6,  0.4,  0.3]
+      - [300, 0.5,  0.35, 0.25, 0.15]
+      - [400, 0.25, 0.15, 0.1,  0.05]
+  tank_artillery_hit:       # 직사화기 → 전차/포병 명중확률
+    columns: ["Distance (m)", "ES", "EM", "DS", "DM"]
+    rows:
+      - [0,    0.45, 0.4,  0.3,  0.25]
+      - [200,  0.4,  0.3,  0.2,  0.15]
+      - [400,  0.3,  0.2,  0.1,  0.05]
+      - [800,  0.2,  0.1,  0.05, 0.02]
+      - [1200, 0.1,  0.05, 0.02, 0.01]
+  rifle_at_commander_kh:    # 보병/대전차/지휘소 피격 시 상태별 확률
+    columns: ["Distance (m)", "State", "Minor", "Serious", "Critical", "Fetal"]
+    rows:
+      - [100, "ES", 0.3,  0.3, 0.25, 0.15]
+      - [100, "EM", 0.35, 0.3, 0.2,  0.15]
+      - [100, "DS", 0.4,  0.3, 0.2,  0.1]
+      - [100, "DM", 0.45, 0.3, 0.15, 0.1]
+      - [300, "ES", 0.4,  0.3, 0.2,  0.1]
+      - [300, "EM", 0.45, 0.3, 0.15, 0.1]
+      - [300, "DS", 0.5,  0.3, 0.15, 0.05]
+      - [300, "DM", 0.55, 0.3, 0.1,  0.05]
+      - [500, "ES", 0.5,  0.3, 0.15, 0.05]
+      - [500, "EM", 0.55, 0.3, 0.1,  0.05]
+      - [500, "DS", 0.6,  0.3, 0.08, 0.02]
+      - [500, "DM", 0.65, 0.3, 0.04, 0.01]
+  tank_artillery_kh:        # 전차/포병 피격 시 Kill Type 확률 (거리 무관)
+    columns: ["Kill Type", "ES", "EM", "DS", "DM"]
+    rows:
+      - ["M-Kill",  0.5, 0.5, 0.5, 0.5]
+      - ["F-Kill",  0.5, 0.5, 0.5, 0.5]
+      - ["MF-Kill", 0.8, 0.8, 0.8, 0.8]
+      - ["K-Kill",  0.1, 0.1, 0.1, 0.1]
 
 # --- 이동 ---
 movement:
@@ -45,6 +97,8 @@ movement:
 drone:
   grid_cell_size_m: 250             # 3×3 격자 한 칸 크기 (m)
   pattern_change_time_s: 60.0       # 다음 격자로 옮기는 주기 (초)
+  # TAI 중심 3×3 격자 순회 순서 (grid_x, grid_y; 1~3)
+  pattern: [[1,1],[1,2],[1,3],[2,3],[2,2],[2,1],[3,1],[3,2],[3,3]]
 
 # --- 유닛별 능력치 ---
 # fire_interval: [a,b]→uniform(a,b),  [a,b,c]→triangular(low,high,mode),  null→사격 안 함

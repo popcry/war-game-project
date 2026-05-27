@@ -65,12 +65,11 @@ UNIT_TYPE_ABBR = {
 #   - RIFLE/ANTI_TANK/COMMAND_POST: alive / minor / serious / critical / fatal
 DEAD_STATUSES = {Status.K_KILL, Status.FATAL}
 
-COMBAT_UNIT_TYPES = {
-    UnitType.RIFLE,
-    UnitType.ANTI_TANK,
-    UnitType.TANK,
-    UnitType.ARTILLERY,
-}
+# 조기종료 판정 대상(전투유닛) — config에서 읽음
+with open('config.yaml', 'r') as _f:
+    _COMBAT_TYPES_CFG = yaml.safe_load(_f)['simulation'].get(
+        'combat_unit_types', ['RIFLE', 'ANTI_TANK', 'TANK', 'ARTILLERY'])
+COMBAT_UNIT_TYPES = {UnitType[name] for name in _COMBAT_TYPES_CFG}
 
 
 # unit.status(9종) → kill 분류(5종) 매핑

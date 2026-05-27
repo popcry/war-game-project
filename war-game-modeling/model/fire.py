@@ -17,6 +17,7 @@ with open('config.yaml', 'r') as f:
 
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 _FIRE_CFG = config['fire']
+_PROTECTED_TERRAIN = set(_FIRE_CFG.get('protected_terrain_types', ['mountain', 'trench']))
 
 class Fire:
     def __init__(self, money_tracker: Optional[MoneyTracker] = None):
@@ -158,7 +159,7 @@ class Fire:
             - DM: 차폐 이동
         """
         terrain_type = self.terrain.get_terrain_type(target.position)
-        is_protected_terrain = terrain_type in ['mountain', 'trench']
+        is_protected_terrain = terrain_type in _PROTECTED_TERRAIN
         is_moving = target.action == Action.MOVE
 
         if is_protected_terrain:
