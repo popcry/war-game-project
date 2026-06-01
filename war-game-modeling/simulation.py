@@ -122,7 +122,9 @@ class Simulation:
         csv_cfg = self.config.get('csv', {})
         self.csv_enabled = csv_cfg.get('enabled', True)
         self.csv_path = csv_cfg.get('output_path', 'results/simulation.csv')
+        self.money_csv_path = csv_cfg.get('money_output_path', 'results/money.csv')
         self.csv_rows: List[dict] = []
+        self.money_csv_rows: List[dict] = []
         self.agent_id_map: Dict[int, str] = {}
         self.pixel_to_meter = self.config['simulation']['pixel_to_meter_scale']
         self.drone_elevation_m = self.config['simulation']['drone_elevation']
@@ -238,7 +240,7 @@ class Simulation:
             self.agent_id_map[unit.id] = f"{team_str}_{abbr}_{counters[key]}"
 
     def _record_tick(self, current_events: List[Event]):
-        """현재 시점 모든 유닛의 상태 + 이번 tick에 발생한 이벤트를 CSV 버퍼에 기록"""
+        """현재 시점 모든 유닛의 상태 + 이번 tick에 발생한 이벤트 + 팀별 누적 자금을 CSV 버퍼에 기록"""
         if not self.csv_enabled:
             return
 
@@ -247,6 +249,19 @@ class Simulation:
         for ev in current_events:
             if ev.event_type == EventType.FIRE:
                 fire_events[ev.source_id] = ev.target_id
+
+        # 팀별 누적 자금 스냅샷 (RED, BLUE 한 줄씩)
+        if self.money_tracker is not None:
+            ts = round(self.current_time, 3)
+            for team in (Team.RED, Team.BLUE):
+                s = self.money_tracker.get_team_summary(team)
+                self.money_csv_rows.append({
+                    "timestamp": ts,
+                    "team": team.value.lower(),
+                    "fire_cost": round(s["fire"], 2),
+                    "damage_cost": round(s["damage"], 2),
+                    "total": round(s["total"], 2),
+                })
 
         for unit in self.units:
             x_m = unit.position[0] * self.pixel_to_meter
@@ -313,7 +328,7 @@ class Simulation:
         return None
 
     def _save_csv(self):
-        """버퍼된 CSV 행을 파일로 저장"""
+        """버퍼된 CSV 행을 파일로 저장 (simulation.csv + money.csv)"""
         if not self.csv_enabled or not self.csv_rows:
             return
 
@@ -328,6 +343,18 @@ class Simulation:
             writer.writeheader()
             writer.writerows(self.csv_rows)
         print(f"CSV saved: {self.csv_path} ({len(self.csv_rows)} rows)")
+
+        # money.csv 저장 — 매 tick 팀별 누적 자금 추이
+        if self.money_csv_rows:
+            money_dir = os.path.dirname(self.money_csv_path)
+            if money_dir:
+                os.makedirs(money_dir, exist_ok=True)
+            money_fields = ["timestamp", "team", "fire_cost", "damage_cost", "total"]
+            with open(self.money_csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=money_fields)
+                writer.writeheader()
+                writer.writerows(self.money_csv_rows)
+            print(f"Money CSV saved: {self.money_csv_path} ({len(self.money_csv_rows)} rows)")
 
     def _get_command_for_team(self, team: Team) -> Command:
         """팀에 대한 명령 반환"""

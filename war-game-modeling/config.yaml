@@ -15,6 +15,7 @@ video:
 csv:
   enabled: true
   output_path: "results/simulation.csv"
+  money_output_path: "results/money.csv"   # 매 tick 팀별 누적 자금(사격·피해·합계) 기록
 
 distance_rescale: 1
 
