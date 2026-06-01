@@ -5,7 +5,7 @@ from model.unit import UnitType, Team, Unit, Status
 from collections import deque
 import yaml
 
-with open('config.yaml', 'r') as f:
+with open('config.yaml', 'r', encoding='utf-8') as f:
     _CFG = yaml.safe_load(f)
 _PHASES_CFG = _CFG['phases']
 _PHASE_TR_CFG = _CFG['phase_transitions']

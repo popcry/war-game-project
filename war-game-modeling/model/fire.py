@@ -12,12 +12,23 @@ import math
 import pandas as pd
 import numpy as np
 import yaml
-with open('config.yaml', 'r') as f:
+with open('config.yaml', 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 _FIRE_CFG = config['fire']
 _PROTECTED_TERRAIN = set(_FIRE_CFG.get('protected_terrain_types', ['mountain', 'trench']))
+
+
+def _load_target_priority(raw_priority: Dict[str, List[str]]) -> Dict[UnitType, List[UnitType]]:
+    priority = {}
+    for attacker_name, target_names in raw_priority.items():
+        attacker_type = UnitType[attacker_name]
+        priority[attacker_type] = [UnitType[target_name] for target_name in target_names]
+    return priority
+
+
+_TARGET_PRIORITY = _load_target_priority(_FIRE_CFG.get('target_priority', {}))
 
 class Fire:
     def __init__(self, money_tracker: Optional[MoneyTracker] = None):
@@ -171,39 +182,32 @@ class Fire:
         """사격 가능한 표적 중에서 목표 선정"""
         if not attacker.eligible_target_list:
             return None
-            
-        # Artillery는 command.fire_priority를 고려
-        if attacker.unit_type == UnitType.ARTILLERY:
-            # 우선순위별로 표적 분류
-            priority_targets = {}
-            for target_id in attacker.eligible_target_list:
-                target = next((u for u in all_units if u.id == target_id), None)
-                if target:  
-                    priority = command.fire_priority.get(target.unit_type, 0)
-                    if priority not in priority_targets:
-                        priority_targets[priority] = []
-                    priority_targets[priority].append(target_id)
-            
-            # 가장 낮은 우선순위의 표적들 중에서 랜덤 선택
-            if priority_targets:
-                lowest_priority = min(priority_targets.keys())
-                return random.choice(priority_targets[lowest_priority])
+
+        priority_order = _TARGET_PRIORITY.get(attacker.unit_type)
+        if priority_order:
+            for target_type in priority_order:
+                candidates = []
+                for target_id in attacker.eligible_target_list:
+                    target = next((u for u in all_units if u.id == target_id), None)
+                    if target and target.unit_type == target_type:
+                        candidates.append(target)
+                if candidates:
+                    nearest = min(candidates, key=lambda target: calculate_distance(attacker, target))
+                    return nearest.id
             return None
-        
-        # Artillery가 아닌 경우 거리가 가까운 표적 선정
-        else:
-            min_distance = float('inf')
-            selected_target = None
-            
-            for target_id in attacker.eligible_target_list:
-                target = next((u for u in all_units if u.id == target_id), None)
-                if target:  # eligible_target_list에는 이미 ALIVE와 M_KILL만 있음
-                    distance = calculate_distance(attacker, target)
-                    if distance < min_distance:
-                        min_distance = distance
-                        selected_target = target_id
-            
-            return selected_target
+
+        min_distance = float('inf')
+        selected_target = None
+
+        for target_id in attacker.eligible_target_list:
+            target = next((u for u in all_units if u.id == target_id), None)
+            if target:
+                distance = calculate_distance(attacker, target)
+                if distance < min_distance:
+                    min_distance = distance
+                    selected_target = target_id
+
+        return selected_target
 
     def fire(self, attacker: Unit, target: Unit, all_units: List[Unit], command: Command, current_time: float) -> Optional[Event]:
         """유닛의 사격 처리"""

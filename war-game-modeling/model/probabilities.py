@@ -4,7 +4,7 @@ from typing import Dict, Tuple, Union
 from model.unit import UnitType, Status
 
 # 명중/살상 확률 테이블을 config.yaml에서 로드 (구 database/*.csv 대체)
-with open('config.yaml', 'r') as _f:
+with open('config.yaml', 'r', encoding='utf-8') as _f:
     _PROB_CFG = yaml.safe_load(_f)['probabilities']
 
 

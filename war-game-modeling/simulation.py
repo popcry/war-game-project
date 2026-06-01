@@ -66,7 +66,7 @@ UNIT_TYPE_ABBR = {
 DEAD_STATUSES = {Status.K_KILL, Status.FATAL}
 
 # 조기종료 판정 대상(전투유닛) — config에서 읽음
-with open('config.yaml', 'r') as _f:
+with open('config.yaml', 'r', encoding='utf-8') as _f:
     _COMBAT_TYPES_CFG = yaml.safe_load(_f)['simulation'].get(
         'combat_unit_types', ['RIFLE', 'ANTI_TANK', 'TANK', 'ARTILLERY'])
 COMBAT_UNIT_TYPES = {UnitType[name] for name in _COMBAT_TYPES_CFG}
@@ -185,7 +185,7 @@ class Simulation:
 
     def _load_config(self, config_file: str) -> dict:
         """설정 파일 로드"""
-        with open(config_file, 'r') as f:
+        with open(config_file, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
 
     def _load_initial_units(self):

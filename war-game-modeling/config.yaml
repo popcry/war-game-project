@@ -44,6 +44,15 @@ fire:
   artillery_sigma_range_pct: 0.02   # 포병 사거리 공산오차
   artillery_sigma_dev_pct: 0.01     # 포병 편의 공산오차
   protected_terrain_types: [mountain, trench]   # 방호(차폐) 상태로 판정하는 지형
+  # Attacker -> target priority. Only listed target types are selected.
+  # If multiple targets have the same priority type, the nearest one is selected.
+  target_priority:
+    RIFLE: [RIFLE, DRONE, ANTI_TANK]
+    ARTILLERY: [TANK, RIFLE]
+    TANK: [TANK, ANTI_TANK, RIFLE]
+    ANTI_TANK: [TANK]
+    DRONE: [TANK, RIFLE]
+    SELF_DEST_DRONE: [TANK, RIFLE]
 
 # --- 명중/살상 확률 테이블 (구 database/*.csv) ---
 # 각 표는 columns + rows 로 정의되며, 코드에서 동일한 DataFrame으로 로드됩니다.

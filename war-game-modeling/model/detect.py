@@ -5,7 +5,7 @@ from model.function import calculate_distance
 import random
 import yaml
 
-with open('config.yaml', 'r') as f:
+with open('config.yaml', 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
