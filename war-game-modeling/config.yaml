@@ -20,14 +20,24 @@ csv:
 distance_rescale: 1
 
 # --- 시뮬레이션 코어 ---
+# 확장 부흘레다르 bbox 기준:
+#   south=47.6664170, west=37.0680910, north=47.8612220, east=37.4654310
+#   ≈ 29.75 km(가로) × 21.69 km(세로), 비율 1.37
+#   캔버스 1200×875 × 25 m/px → 정확히 매핑
 simulation:
-  pixel_to_meter_scale: 5.0   # 1 pixel = 5 meters
-  map_width_px: 800
-  map_height_px: 450
-  lethal_radius: 30.0         # 포병 치사반경 (m)
-  mountain_detect_prob: 0.2   # 산악 지형 탐지 확률
-  drone_elevation: 200.0      # 드론 비행 고도 (m)
-  combat_unit_types: [RIFLE, ANTI_TANK, TANK, ARTILLERY]   # 조기종료 판정 대상(전투유닛)
+  pixel_to_meter_scale: 25.0   # 1 pixel = 25 meters  (5 → 25, 스케일 5배 증가)
+  map_width_px: 1200
+  map_height_px: 875
+  lethal_radius: 30.0          # 포병 치사반경 (m)
+  mountain_detect_prob: 0.2    # 산악 지형 탐지 확률
+  drone_elevation: 200.0       # 드론 비행 고도 (m)
+  combat_unit_types: [RIFLE, ANTI_TANK, TANK, ARTILLERY]
+  # 새 bbox (참고용, 코드에서 직접 안 씀)
+  bbox:
+    south: 47.6664170
+    west:  37.0680910
+    north: 47.8612220
+    east:  37.4654310
 
 # --- 스케일 보정 상수 (원본 코드 호환) ---
 scaling:
@@ -327,15 +337,22 @@ money:
     K_KILL: 1.0
 
 # ============================================================
-# Terrain layer settings (Merge_trench_dest)
+# Terrain layer settings
 # Layer priority: river -> trench -> road -> mountain -> normal
+#
+# 확장 부흘레다르 bbox로 새로 라벨링 예정.
+# 지금은 elevation_file만 새 DEM (database/xyz_coordinates.csv) 로 설정하고,
+# river/road/trench 마스크 파일은 비어있어 자동으로 빈 마스크로 처리됨.
+# 사용자가 새 마스크 CSV(1200×875)를 만들어 채우면 그대로 동작합니다.
 # ============================================================
 terrain:
-  source: "vuhledar_layers"
-  elevation_file: "database/vuhledar_elevation.csv"
-  river_mask_file: "database/vuhledar_river_mask.csv"
-  road_type_file: "database/vuhledar_road_type.csv"
-  trench_mask_file: "database/vuhledar_trench_mask.csv"
+  source: "vuhledar_expanded"
+  # 확장 bbox용 지형 레이어 — 새 지도 데이터(이미 라벨링된)를 아래 경로로 떨어뜨리면 자동 인식.
+  # 파일이 없으면 해당 마스크는 모두-False(없음)로 안전 처리됨.
+  elevation_file: "database/xyz_coordinates.csv"
+  river_mask_file: "database/vuhledar_ext_river_mask.csv"
+  road_type_file:  "database/vuhledar_ext_road_type.csv"
+  trench_mask_file: "database/vuhledar_ext_trench_mask.csv"
   trench_labels: [1, "1", "trench", "true", "t"]
   mountain_elevation_quantile: 0.75
   mobility:
