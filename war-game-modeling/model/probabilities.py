@@ -130,9 +130,8 @@ class ProbabilitySystem:
         row = cls._find_damage_logic(attacker_type, target_type, protection_state, side)
         if row is None:
             return {}
-        if attacker_type != UnitType.ARTILLERY:
-            if not cls._is_in_range(row, distance):
-                return {}
+        if not cls._is_in_range(row, distance):
+            return {}
 
         probability = _parse_probability(row["Pk/h"])
         if probability is None:
@@ -141,6 +140,35 @@ class ProbabilitySystem:
         if target_type in [UnitType.RIFLE, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
             return {Status.FATAL: probability}
         return {Status.K_KILL: probability}
+
+    @classmethod
+    def is_in_damage_logic_range(
+        cls,
+        attacker_type: UnitType,
+        target_type: UnitType,
+        distance: float,
+        protection_state: str,
+        side: Optional[str] = None,
+    ) -> bool:
+        """Return whether this attack is inside the matching damage logic range."""
+        row = cls._find_damage_logic(attacker_type, target_type, protection_state, side)
+        if row is None:
+            return False
+        return cls._is_in_range(row, distance)
+
+    @classmethod
+    def get_effect_radius(
+        cls,
+        attacker_type: UnitType,
+        target_type: UnitType,
+        protection_state: str,
+        side: Optional[str] = None,
+    ) -> Optional[float]:
+        """Return RL from damage_logics in meters when it is numeric."""
+        row = cls._find_damage_logic(attacker_type, target_type, protection_state, side)
+        if row is None or "RL" not in row:
+            return None
+        return _parse_number(row["RL"])
 
     @classmethod
     def _find_damage_logic(

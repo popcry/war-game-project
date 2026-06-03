@@ -171,7 +171,7 @@ units:
     detect_range_m: 1000
     detectability: 0.8
     speed_kmh: 7
-    weapon_range_m: 400
+    weapon_range_m: 500
     fire_interval: [2.0, 3.0]
   ANTI_TANK:
     detect_range_m: 3000

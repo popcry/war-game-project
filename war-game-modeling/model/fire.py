@@ -82,6 +82,43 @@ class Fire:
 
         return math.exp(-(distance ** 2) / (2 * (lethal_radius ** 2)))
 
+    def calculate_carlton_probability(
+        self,
+        attacker: Unit,
+        aim_point: Tuple[float, float],
+        unit: Unit,
+        effect_radius_m: float,
+        range_to_aim_m: float,
+    ) -> float:
+        """Approximate Carlton probability for a circular lethal area."""
+        sigma_range = _FIRE_CFG['artillery_sigma_range_pct'] * range_to_aim_m
+        sigma_dev = _FIRE_CFG['artillery_sigma_dev_pct'] * range_to_aim_m
+        if sigma_range <= 0 or sigma_dev <= 0 or effect_radius_m <= 0:
+            return 0.0
+
+        shot_dx = aim_point[0] - attacker.position[0]
+        shot_dy = aim_point[1] - attacker.position[1]
+        shot_len = math.hypot(shot_dx, shot_dy)
+        if shot_len <= 0:
+            return 0.0
+
+        ux = shot_dx / shot_len
+        uy = shot_dy / shot_len
+        offset_x_m = (unit.position[0] - aim_point[0]) * PIXEL_TO_METER_SCALE
+        offset_y_m = (unit.position[1] - aim_point[1]) * PIXEL_TO_METER_SCALE
+        range_offset_m = offset_x_m * ux + offset_y_m * uy
+        dev_offset_m = -offset_x_m * uy + offset_y_m * ux
+
+        lethal_area = math.pi * (effect_radius_m ** 2)
+        density_scale = lethal_area / (2 * math.pi * sigma_range * sigma_dev)
+        offset_scale = math.exp(
+            -0.5 * (
+                (range_offset_m / sigma_range) ** 2
+                + (dev_offset_m / sigma_dev) ** 2
+            )
+        )
+        return min(1.0, 1.0 - math.exp(-(density_scale * offset_scale)))
+
     def apply_artillery_damage(
         self,
         attacker: Unit,
@@ -149,6 +186,82 @@ class Fire:
                                 affected_units.append((unit, old_status, status))
                                 break
 
+    def apply_artillery_damage_carlton(
+        self,
+        attacker: Unit,
+        aim_point: Tuple[float, float],
+        all_units: List[Unit],
+        current_time: float,
+    ) -> None:
+        """Apply Carlton-based artillery damage around the aim point."""
+        range_to_aim_m = calculate_point_distance(attacker.position, aim_point) * PIXEL_TO_METER_SCALE
+
+        for unit in all_units:
+            if (
+                unit.status.value not in ["ALIVE", "M_KILL", "MINOR"]
+                or unit.unit_type == UnitType.DRONE
+            ):
+                continue
+
+            protection_state = self.get_protection_state(unit)
+            attack_distance_m = calculate_distance(attacker, unit) * PIXEL_TO_METER_SCALE
+            if not ProbabilitySystem.is_in_damage_logic_range(
+                UnitType.ARTILLERY,
+                unit.unit_type,
+                attack_distance_m,
+                protection_state,
+                side=attacker.team.value,
+            ):
+                continue
+
+            effect_radius_m = ProbabilitySystem.get_effect_radius(
+                UnitType.ARTILLERY,
+                unit.unit_type,
+                protection_state,
+                side=attacker.team.value,
+            )
+            if effect_radius_m is None:
+                effect_radius_m = float(config['simulation']['lethal_radius'])
+
+            damage_prob = (
+                self.calculate_carlton_probability(
+                    attacker,
+                    aim_point,
+                    unit,
+                    effect_radius_m,
+                    range_to_aim_m,
+                )
+                * self.terrain.get_damage_probability_multiplier(unit.position)
+            )
+            if random.random() > damage_prob:
+                continue
+
+            kill_probs = ProbabilitySystem.get_kill_probability(
+                UnitType.ARTILLERY,
+                unit.unit_type,
+                attack_distance_m,
+                protection_state,
+                side=attacker.team.value,
+            )
+            if not kill_probs:
+                continue
+
+            if unit.unit_type in [UnitType.TANK, UnitType.ARTILLERY]:
+                m_kill_prob = kill_probs.get(Status.M_KILL, 0.0)
+                rand_val = random.random() if unit.status == Status.ALIVE else random.uniform(m_kill_prob, 1.0)
+            else:
+                minor_prob = kill_probs.get(Status.MINOR, 0.0)
+                rand_val = random.random() if unit.status == Status.ALIVE else random.uniform(minor_prob, 1.0)
+
+            cumulative = 0.0
+            old_status = unit.status
+            for status, prob in kill_probs.items():
+                cumulative += prob
+                if rand_val <= cumulative:
+                    unit.update_status(status)
+                    self.record_damage_cost(unit, old_status, status)
+                    break
+
     def apply_self_dest_drone_damage(
         self,
         attacker: Unit,
@@ -206,6 +319,15 @@ class Fire:
                         
                     distance = calculate_distance(unit, target)
                     if distance <= unit.weapon_range:
+                        protection_state = self.get_protection_state(target)
+                        if not ProbabilitySystem.is_in_damage_logic_range(
+                            unit.unit_type,
+                            target.unit_type,
+                            distance * PIXEL_TO_METER_SCALE,
+                            protection_state,
+                            side=unit.team.value,
+                        ):
+                            continue
                         # 직사화기의 경우 LOS 체크
                         if unit.unit_type in [UnitType.RIFLE, UnitType.TANK, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
                             if self.detect.check_los(unit, target):  # LOS가 확보된 경우에만 타겟 추가
@@ -278,7 +400,7 @@ class Fire:
         # 곡사화기인 경우 다른 방식으로 처리
         if attacker.unit_type == UnitType.ARTILLERY:
             # 탄착지점 계산
-            impact_point = self.calculate_impact_point(target.position, distance)
+            aim_point = target.position
             
             # 치사반경 내 아군 확인
             lethal_radius = config['simulation']['lethal_radius'] / PIXEL_TO_METER_SCALE  # 치사반경
@@ -289,7 +411,7 @@ class Fire:
                     and unit.status.value in ["ALIVE", "M_KILL", "MINOR"]
                     and unit.unit_type != UnitType.DRONE
                     and unit.unit_type != UnitType.SELF_DEST_DRONE):  # 드론 및 자폭 드론 제외
-                    unit_distance = calculate_point_distance(impact_point, unit.position)
+                    unit_distance = calculate_point_distance(aim_point, unit.position)
                     if unit_distance <= lethal_radius:
                         friendly_units_in_radius.append(unit)
             
@@ -300,7 +422,7 @@ class Fire:
             
             # 탄착지점 주변의 모든 유닛에 대한 피해 적용
             self.record_fire_cost(attacker)
-            self.apply_artillery_damage(attacker, impact_point, all_units, current_time)
+            self.apply_artillery_damage_carlton(attacker, aim_point, all_units, current_time)
             attacker.update_action(Action.STOP)  # 사격 완료 후 STOP으로 변경
             return None
 
