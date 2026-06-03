@@ -101,9 +101,29 @@ class Movement:
         
         return (center_x, center_y)
 
-    def get_objective(self, unit: Unit, command: Command, current_time: float) -> Optional[Tuple[float, float]]:
-        """유닛 타입에 따른 목적지 반환"""
-        if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
+    def get_objective(self, unit: Unit, command: Command, current_time: float,
+                      all_units: Optional[List[Unit]] = None) -> Optional[Tuple[float, float]]:
+        """유닛 타입에 따른 목적지 반환
+
+        SELF_DEST_DRONE: 탐지된 전차/포병이 있으면 그 위치로 직접 비행(자폭 접근),
+                         없으면 기존 TAI 3×3 정찰 패턴.
+        """
+        if unit.unit_type == UnitType.SELF_DEST_DRONE and all_units is not None:
+            HIGH_VALUE = {UnitType.TANK, UnitType.ARTILLERY}
+            best_pos = None
+            best_dist = float('inf')
+            for tid in unit.target_list:
+                t = next((u for u in all_units if u.id == tid), None)
+                if t and t.unit_type in HIGH_VALUE and t.status in [Status.ALIVE, Status.M_KILL, Status.MINOR]:
+                    d = calculate_point_distance(unit.position, t.position)
+                    if d < best_dist:
+                        best_dist = d
+                        best_pos = t.position
+            if best_pos is not None:
+                return best_pos
+            return self.calculate_drone_objective(unit, command, current_time)
+
+        if unit.unit_type == UnitType.DRONE:
             return self.calculate_drone_objective(unit, command, current_time)
         elif unit.unit_type in [UnitType.RIFLE, UnitType.TANK, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
             if command.maneuver_objective and len(command.maneuver_objective) > 0:
@@ -114,18 +134,71 @@ class Movement:
                 return tuple(x + random.uniform(-j, j) for x in base_objective)
         return None
 
+    # --- Squad / 진형 헬퍼 ---
+    def _find_alive_leader(self, unit: Unit, all_units: List[Unit]) -> Optional[Unit]:
+        """unit이 속한 squad의 살아있는 리더 반환. unit 자신이 리더면 None."""
+        if not unit.squad_id or unit.is_leader:
+            return None
+        for u in all_units:
+            if (u.squad_id == unit.squad_id and u.is_leader
+                    and u.status in [Status.ALIVE, Status.MINOR, Status.M_KILL]):
+                return u
+        return None
+
+    def _squad_follower_target(self, unit: Unit, all_units: List[Unit]) -> Optional[Tuple[float, float]]:
+        """진형 추종 유닛(non-leader)의 목표 위치 = 리더 위치 + 회전된 진형 오프셋.
+        리더가 없거나(squad 단독) 진형 오프셋이 없으면 None."""
+        leader = self._find_alive_leader(unit, all_units)
+        if leader is None or unit.formation_offset is None:
+            return None
+        local_x_m, local_y_m = unit.formation_offset
+        yaw = leader.yaw  # 리더의 진행 방향 (radian)
+        cos_y, sin_y = math.cos(yaw), math.sin(yaw)
+        # local: +y=forward, +x=right
+        # world forward = (cos, sin), world right = (sin, -cos)
+        world_dx_m = local_x_m * sin_y + local_y_m * cos_y
+        world_dy_m = local_x_m * (-cos_y) + local_y_m * sin_y
+        dx_px = world_dx_m / PIXEL_TO_METER_SCALE
+        dy_px = world_dy_m / PIXEL_TO_METER_SCALE
+        return (leader.position[0] + dx_px, leader.position[1] + dy_px)
+
     def move(self, unit: Unit, command: Command, current_time: float, all_units: List[Unit]) -> Optional[Event]:
         """유닛 이동 실행
-        1. objective 방향으로 1초 후의 new position 계산
-        3. FEL에 move event 예약 (1초 후 new position으로 이동)
-        3. action을 move로 변경
+        - 분대 추종원: 리더 위치 + 회전된 진형 오프셋을 목표로 직선 이동
+        - 리더 / squad 없음: 기존 로직 (TAI 또는 maneuver_objective)
         """
         if not self.can_move(unit):
             unit.update_action(Action.STOP)
             return None
 
+        # === 분대 추종원: 리더 위치 + 진형 오프셋으로 ===
+        follower_target = self._squad_follower_target(unit, all_units)
+        if follower_target is not None:
+            unit.update_objective(follower_target)
+            dx = follower_target[0] - unit.position[0]
+            dy = follower_target[1] - unit.position[1]
+            distance = calculate_point_distance(unit.position, follower_target)
+            if distance < self.MIN_DISTANCE_TO_OBJECTIVE:
+                # 이미 진형 위치 ≒ 정지 (리더가 움직이면 다시 이동 이벤트 예약됨)
+                unit.update_action(Action.STOP)
+                return None
+            unit.update_action(Action.MOVE)
+            if distance > 0:
+                dx /= distance
+                dy /= distance
+            speed = self.get_unit_speed(unit, unit.position)
+            next_x = unit.position[0] + dx * speed
+            next_y = unit.position[1] + dy * speed
+            return Event(
+                event_type=EventType.MOVE,
+                time=current_time + 1.0,
+                source_id=unit.id,
+                position=(next_x, next_y),
+            )
+
+        # === 리더 또는 squad 없음: 기존 로직 ===
         # 목표 지점 가져오기
-        objective = self.get_objective(unit, command, current_time)
+        objective = self.get_objective(unit, command, current_time, all_units)
         if not objective:
             unit.update_action(Action.STOP)
             unit.update_objective(None)  # 목표 지점 초기화

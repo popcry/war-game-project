@@ -23,6 +23,10 @@ vuhledar_terrain_project/data_raw/
 vuhledar_terrain_project/data_processed/
 vuhledar_terrain_project/outputs/
 
+# 5x bbox: 100MB 넘는 파생 파일만 제외 (GitHub 단일 파일 제한 초과, 빌더 스크립트로 재생성 가능)
+vuhledar_terrain_project/vuhledar_bbox_5x/data_processed/terrain_grid_30m.csv
+vuhledar_terrain_project/vuhledar_bbox_5x/data_processed/terrain_grid_30m.gpkg
+
 # War-game simulation generated artifacts
 war-game-modeling/.tile_cache/
 war-game-modeling/frames/

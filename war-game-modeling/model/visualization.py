@@ -83,7 +83,9 @@ class Visualizer:
         os.makedirs(self.frame_dir, exist_ok=True)
         
         # Load background image
-        self.background = pygame.image.load(os.path.join("database", "background.png"))
+        # 배경 이미지 — config의 simulation.background_image_path 우선, 없으면 기본 경로
+        bg_path = config.get('simulation', {}).get('background_image_path', 'database/background.png')
+        self.background = pygame.image.load(bg_path)
         self.background = pygame.transform.scale(self.background, (width, height))
         
         # Colors
@@ -482,11 +484,13 @@ class Visualizer:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # ffmpeg command to create video from frames
+        # -vf scale: yuv420p는 가로·세로 모두 짝수여야 함 → 홀수일 때 1픽셀 잘라 짝수로
         cmd = [
             'ffmpeg',
             '-y',  # Overwrite output file if it exists
             '-framerate', str(fps),
             '-i', os.path.join(self.frame_dir, 'frame_%04d.png'),
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             '-c:v', 'libx264',
             '-pix_fmt', 'yuv420p',
             output_path

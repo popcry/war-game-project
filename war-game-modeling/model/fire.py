@@ -250,9 +250,9 @@ class Fire:
                     return nearest.id
             return None
 
+        # priority 미정의 시 폴백: 가장 가까운 표적
         min_distance = float('inf')
         selected_target = None
-
         for target_id in attacker.eligible_target_list:
             target = next((u for u in all_units if u.id == target_id), None)
             if target:
@@ -260,7 +260,6 @@ class Fire:
                 if distance < min_distance:
                     min_distance = distance
                     selected_target = target_id
-
         return selected_target
 
     def fire(self, attacker: Unit, target: Unit, all_units: List[Unit], command: Command, current_time: float) -> Optional[Event]:
@@ -395,10 +394,10 @@ class Fire:
 
         # 탐지 상태 업데이트
         self.detect.update_detection(unit, all_units)
-        
+
         # 사격 가능 타겟 목록 업데이트
         self.update_eligible_targets(unit, all_units)
-        
+
         # 사격 가능한 타겟이 있는지 확인
         if not unit.eligible_target_list:
             return None

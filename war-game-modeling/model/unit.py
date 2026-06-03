@@ -70,6 +70,10 @@ class Unit:
     objective: Optional[Tuple[float, float]] = None  # 이동 목표 지점
     target: Optional[int] = None  # 현재 사격 대상
     yaw: float = 0.0  # heading (radians), updated when position changes
+    # --- 분대(squad) / 진형(formation) 메타 (Phase 4) ---
+    squad_id: Optional[str] = None       # 예: "red_inf_1", "blue_tnk_3". 같은 squad_id끼리 함께 움직임
+    is_leader: bool = False              # 분대에서 진형 중심을 잡는 유닛 (보통 squad의 첫 unit)
+    formation_offset: Optional[Tuple[float, float]] = None  # 진형 내 (dx_m, dy_m) — local frame, +y=전진방향
 
     def get_fire_interval(self) -> float:
         """유닛 타입별 사격 소요시간 — config['units'][TYPE]['fire_interval']에서 읽음.

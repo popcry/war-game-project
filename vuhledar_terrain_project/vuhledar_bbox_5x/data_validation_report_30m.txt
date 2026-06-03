@@ -1,0 +1,64 @@
+Vuhledar Terrain Data Validation Report
+========================================
+Run time: 2026-05-20T13:38:39
+Input bounding box: south=47.666417, west=37.068091, north=47.861222, east=37.465431
+CRS: source EPSG:4326, working/output EPSG:32637
+
+OSM feature counts:
+- roads: 2799
+- buildings: 5021
+- landuse: 2501
+- natural: 2211
+- waterways: 580
+- railways: 84
+
+Grid cell count: 716579
+
+terrain_type cell counts:
+- forest: 76192
+- open_field: 583768
+- railway_corridor: 889
+- urban: 29952
+- water: 25778
+
+road_type cell counts:
+- bus_stop: 2
+- construction: 1
+- footway: 464
+- none: 662313
+- path: 1331
+- pedestrian: 14
+- residential: 7483
+- secondary: 2184
+- service: 4450
+- tertiary: 2759
+- track: 31844
+- unclassified: 3734
+
+DEM used: yes
+Elevation stats: min=123.62, max=263.86, mean=177.88
+Slope stats: min=0.00, max=59.26, mean=2.59
+
+Warnings:
+- DEM elevation is missing for 752 grid cells, usually AOI edge nodata.
+- DEM slope is missing for 3187 grid cells, usually AOI edge nodata.
+
+Generated files:
+- outputs\vuhledar_bbox_5x\data_raw\osm_roads.gpkg
+- outputs\vuhledar_bbox_5x\data_raw\osm_buildings.gpkg
+- outputs\vuhledar_bbox_5x\data_raw\osm_landuse.gpkg
+- outputs\vuhledar_bbox_5x\data_raw\osm_natural.gpkg
+- outputs\vuhledar_bbox_5x\data_raw\osm_waterways.gpkg
+- outputs\vuhledar_bbox_5x\data_raw\osm_railways.gpkg
+- outputs\vuhledar_bbox_5x\data_processed\dem_utm32637.tif
+- outputs\vuhledar_bbox_5x\data_processed\slope_percent.tif
+- outputs\vuhledar_bbox_5x\vuhledar_hillshade.png
+- outputs\vuhledar_bbox_5x\vuhledar_slope_map.png
+- outputs\vuhledar_bbox_5x\data_processed\terrain_grid_30m.gpkg
+- outputs\vuhledar_bbox_5x\data_processed\terrain_grid_30m.csv
+- outputs\vuhledar_bbox_5x\vuhledar_contour_map.png
+- outputs\vuhledar_bbox_5x\vuhledar_static_map_30m.png
+- outputs\vuhledar_bbox_5x\vuhledar_terrain_classification_map_30m.png
+- outputs\vuhledar_bbox_5x\vuhledar_terrain_overlay_30m.png
+- outputs\vuhledar_bbox_5x\vuhledar_osm_layers_map.html
+- outputs\vuhledar_bbox_5x\vuhledar_terrain_grid_map_30m.html

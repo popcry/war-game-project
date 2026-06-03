@@ -28,6 +28,7 @@ simulation:
   pixel_to_meter_scale: 25.0   # 1 pixel = 25 meters  (5 → 25, 스케일 5배 증가)
   map_width_px: 1200
   map_height_px: 875
+  background_image_path: "database/background_5x.png"
   lethal_radius: 30.0          # 포병 치사반경 (m)
   mountain_detect_prob: 0.2    # 산악 지형 탐지 확률
   drone_elevation: 200.0       # 드론 비행 고도 (m)
@@ -41,13 +42,13 @@ simulation:
 
 # --- 스케일 보정 상수 (원본 코드 호환) ---
 scaling:
-  range_extra_div_non_artillery: 5   # 포병 외 detect/weapon range 추가 제수
+  range_extra_div_non_artillery: 1   # 포병 외 사거리도 명목 그대로 (5x 맵용; 종전 5는 원본 5m/px 호환용)
   speed_scale_divisor: 5             # km/h → px/s 변환 제수
   speed_time_multiplier: 30          # km/h → px/s 변환 시간 계수
 
 # --- 탐지 / LOS ---
 detection:
-  los_check_interval_px: 10   # 두 유닛 사이 LOS 샘플 간격 (픽셀)
+  los_check_interval_px: 10   # 두 유닛 사이 LOS 샘플 간격 (px); 원본값
 
 # --- 사격 ---
 fire:
@@ -154,7 +155,7 @@ probabilities:
 # --- 이동 ---
 movement:
   min_distance_to_objective_m: 50   # 목표 지점 도달 판정 거리
-  objective_jitter_px: 100          # maneuver_objective ±랜덤 분산
+  objective_jitter_px: 20           # maneuver_objective ±랜덤 분산 (≈500m, 5x 스케일 보정)
 
 # --- 드론 정찰 ---
 drone:
@@ -230,30 +231,30 @@ unit_overrides:
 phases:
   RED:
     phase_1:
-      TAI: [650, 350]
+      TAI: [600, 250]    # 5x map: BLUE 진영(북) 상공 정찰
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
-      maneuver_objective: null
+      maneuver_objective: [[600, 350]]   # Phase 1부터 북진 (전선 형성 위해)
     phase_2:
-      TAI: [500, 150]
+      TAI: [600, 150]    # 더 북쪽으로 정찰 깊이 확대
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
       maneuver_objective: null
     phase_3:
-      TAI: [500, 150]
+      TAI: [600, 100]
       fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
-      maneuver_objective: null
+      maneuver_objective: [[600, 80]]    # BLUE 지휘소(북단)로 진격
   BLUE:
     phase_1:
-      TAI: [75, 400]
+      TAI: [600, 650]    # 5x map: RED 진영(남) 상공 정찰
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
-      maneuver_objective: null
+      maneuver_objective: [[600, 500]]   # Phase 1부터 남진 (전선 형성 위해)
     phase_2:
-      TAI: [300, 250]
+      TAI: [600, 750]    # 더 남쪽으로
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
       maneuver_objective: null
     phase_3:
-      TAI: [350, 300]
+      TAI: [600, 800]
       fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
-      maneuver_objective: [[350, 300]]
+      maneuver_objective: [[600, 820]]   # RED 지휘소(남단)로 진격
 
 # Phase 전환 조건
 phase_transitions:
@@ -316,20 +317,21 @@ initial_positions:
     COMMAND_POST: # 1 팀 × 1
       [[600,80]]
 
+# 유닛 수 1/4 스케일 (224 → 약 58) — 테스트용
 num_artillery_red: 0
-num_artillery_blue: 4
-num_drone_red: 6
-num_drone_blue: 9
-num_tank_red: 15
-num_tank_blue: 4
+num_artillery_blue: 1
+num_drone_red: 2
+num_drone_blue: 2
+num_tank_red: 4
+num_tank_blue: 1
 num_at_red: 0
-num_at_blue: 16
-num_infantry_red: 90
-num_infantry_blue: 54
+num_at_blue: 4
+num_infantry_red: 22
+num_infantry_blue: 14
 num_cp_red: 1
 num_cp_blue: 1
-num_self_dest_drone_red: 9
-num_self_dest_drone_blue: 15
+num_self_dest_drone_red: 2
+num_self_dest_drone_blue: 4
 
 # --- 분대/팀 사이즈 (Phase 4 진형 로직이 사용) ---
 # 같은 anchor가 squad_size번 반복돼서 유닛들이 같은 squad에 속함을 표현.
@@ -390,13 +392,13 @@ money:
 # 사용자가 새 마스크 CSV(1200×875)를 만들어 채우면 그대로 동작합니다.
 # ============================================================
 terrain:
-  source: "vuhledar_expanded"
-  # 확장 bbox용 지형 레이어 — 새 지도 데이터(이미 라벨링된)를 아래 경로로 떨어뜨리면 자동 인식.
-  # 파일이 없으면 해당 마스크는 모두-False(없음)로 안전 처리됨.
-  elevation_file: "database/xyz_coordinates.csv"
-  river_mask_file: "database/vuhledar_ext_river_mask.csv"
-  road_type_file:  "database/vuhledar_ext_road_type.csv"
-  trench_mask_file: "database/vuhledar_ext_trench_mask.csv"
+  source: "vuhledar_5x"
+  # 5x 확장 영역(1200×875, 25 m/px) — vuhledar_bbox_5x/terrain_grid_30m.csv 에서 변환·리샘플됨
+  # (생성 스크립트: scripts/build_vuhledar_5x_layers.py + scripts/resize_layers_to_1200x875.py)
+  elevation_file: "database/vuhledar_5x_elevation.csv"
+  river_mask_file: "database/vuhledar_5x_river_mask.disabled.csv"  # 임시 비활성: 강 위 유닛 갇힘 + LOS 차단 회피
+  road_type_file:  "database/vuhledar_5x_road_type.csv"
+  trench_mask_file: "database/vuhledar_5x_trench_mask.csv"
   trench_labels: [1, "1", "trench", "true", "t"]
   mountain_elevation_quantile: 0.75
   mobility:

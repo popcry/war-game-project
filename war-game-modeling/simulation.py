@@ -11,6 +11,7 @@ from model.movement import Movement
 from model.command import Command, Phase
 from model.money import MoneyTracker
 from model.terrain import Terrain
+from model.formation import get_offsets as get_formation_offsets
 import csv
 import heapq
 import argparse
@@ -189,25 +190,46 @@ class Simulation:
             return yaml.safe_load(f)
 
     def _load_initial_units(self):
-        """초기 유닛 로드"""
+        """초기 유닛 로드 — squad_id / is_leader / formation_offset 자동 할당.
+
+        같은 (team, unit_type)의 positions 리스트를 squad_size 단위로 잘라서
+        한 분대로 묶음. 각 분대의 0번 = 리더(진형 정점), 나머지는 진형 오프셋 보유.
+        """
         unit_id = 0
-        
+        squad_sizes_cfg = self.config.get('squad_sizes', {})
+
         def create_units_for_team(team: Team, unit_type: UnitType, positions: List[List[int]], num_units: int):
             nonlocal unit_id
-            # 사용 가능한 위치 수 확인
             available_positions = len(positions)
             if available_positions < num_units:
-                print(f"Warning: Not enough positions for {team.value} {unit_type.value}. Requested {num_units}, but only {available_positions} positions available.")
+                print(f"Warning: Not enough positions for {team.value} {unit_type.value}. "
+                      f"Requested {num_units}, but only {available_positions} positions available.")
                 num_units = available_positions
-            
-            # 지정된 수만큼 위치를 가져옴
-            for pos in positions[:num_units]:
+            if num_units == 0:
+                return
+
+            # 이 (team, type)의 squad_size 와 진형 오프셋
+            squad_size = squad_sizes_cfg.get(team.value, {}).get(unit_type.name, 1)
+            offsets = get_formation_offsets(squad_size)
+            abbr = UNIT_TYPE_ABBR.get(unit_type, 'unk')
+            team_low = team.value.lower()
+
+            for i, pos in enumerate(positions[:num_units]):
                 position = (int(pos[0]), int(pos[1]))
+                squad_idx = i // squad_size + 1            # 1-based 분대 번호
+                in_squad_idx = i % squad_size              # 분대 내 위치
+                squad_id = f"{team_low}_{abbr}_{squad_idx}"
+                is_leader = (in_squad_idx == 0)
+                offset = offsets[in_squad_idx] if in_squad_idx < len(offsets) else (0.0, 0.0)
+
                 self.units.append(Unit(
                     id=unit_id,
                     team=team,
                     position=position,
-                    unit_type=unit_type
+                    unit_type=unit_type,
+                    squad_id=squad_id,
+                    is_leader=is_leader,
+                    formation_offset=offset,
                 ))
                 unit_id += 1
         
@@ -290,6 +312,8 @@ class Simulation:
                 "team": unit.team.value.lower(),
                 "agent_type": UNIT_TYPE_NAME[unit.unit_type],
                 "agent_id": self.agent_id_map[unit.id],
+                "squad_id": unit.squad_id or "",
+                "is_leader": int(unit.is_leader),
                 "x": round(x_m, 2),
                 "y": round(y_m, 2),
                 "z": round(z_m, 2),
@@ -337,6 +361,7 @@ class Simulation:
             os.makedirs(out_dir, exist_ok=True)
 
         fieldnames = ["timestamp", "team", "agent_type", "agent_id",
+                      "squad_id", "is_leader",
                       "x", "y", "z", "yaw", "alive", "event", "target"]
         with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
