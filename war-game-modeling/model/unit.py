@@ -13,9 +13,17 @@ with open('config.yaml', 'r', encoding='utf-8') as f:
 # Constants
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 _UNITS_CFG = config['units']
+_UNIT_OVERRIDES_CFG = config.get('unit_overrides', {})
 
 # 원본 스케일 보존: 포병 이외는 detect/weapon range에 한 번 더 제수 적용 (config 기반)
 _NON_ARTILLERY_RANGE_EXTRA_DIV = config['scaling']['range_extra_div_non_artillery']
+
+
+def _get_unit_cfg(team: 'Team', unit_type: 'UnitType') -> dict:
+    unit_cfg = dict(_UNITS_CFG[unit_type.name])
+    team_overrides = _UNIT_OVERRIDES_CFG.get(team.name, {})
+    unit_cfg.update(team_overrides.get(unit_type.name, {}))
+    return unit_cfg
 
 class Team(Enum):
     RED = "RED"
@@ -69,7 +77,7 @@ class Unit:
         [a,b,c] → triangular(low=a, high=b, mode=c)
         null    → 무한대 (사격 안 함, 예: 드론)
         """
-        fi = _UNITS_CFG[self.unit_type.name].get('fire_interval')
+        fi = _get_unit_cfg(self.team, self.unit_type).get('fire_interval')
         if fi is None:
             return float('inf')
         if len(fi) == 2:
@@ -95,7 +103,7 @@ class Unit:
             raise ValueError(f"Position must be a 2D coordinate, got {self.position}")
 
         # config['units']에서 유닛 스펙 읽기 (포병만 m→px 직접 환산, 나머지는 한번 더 /5)
-        unit_cfg = _UNITS_CFG[self.unit_type.name]
+        unit_cfg = _get_unit_cfg(self.team, self.unit_type)
         extra_div = 1 if self.unit_type == UnitType.ARTILLERY else _NON_ARTILLERY_RANGE_EXTRA_DIV
         self.detect_range = unit_cfg['detect_range_m'] / extra_div / PIXEL_TO_METER_SCALE
         self.detectability = unit_cfg['detectability']

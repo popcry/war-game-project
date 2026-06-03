@@ -18,6 +18,7 @@ with open('config.yaml', 'r', encoding='utf-8') as f:
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 _FIRE_CFG = config['fire']
 _PROTECTED_TERRAIN = set(_FIRE_CFG.get('protected_terrain_types', ['mountain', 'trench']))
+_SELF_DEST_DRONE_LETHAL_RADIUS_M = _FIRE_CFG.get('self_dest_drone_lethal_radius_m', 5.0)
 
 
 def _load_target_priority(raw_priority: Dict[str, List[str]]) -> Dict[UnitType, List[UnitType]]:
@@ -81,7 +82,13 @@ class Fire:
 
         return math.exp(-(distance ** 2) / (2 * (lethal_radius ** 2)))
 
-    def apply_artillery_damage(self, impact_point: Tuple[float, float], all_units: List[Unit], current_time: float) -> None:
+    def apply_artillery_damage(
+        self,
+        attacker: Unit,
+        impact_point: Tuple[float, float],
+        all_units: List[Unit],
+        current_time: float,
+    ) -> None:
         """곡사화기 탄착지점 주변의 모든 유닛에 대한 피해 적용
         
         Args:
@@ -111,7 +118,13 @@ class Fire:
                         protection_state = self.get_protection_state(unit)
                         
                         # 살상확률 계산 및 상태 결정
-                        kill_probs = ProbabilitySystem.get_kill_probability(UnitType.ARTILLERY, unit.unit_type, distance, protection_state)
+                        kill_probs = ProbabilitySystem.get_kill_probability(
+                            UnitType.ARTILLERY,
+                            unit.unit_type,
+                            distance * PIXEL_TO_METER_SCALE,
+                            protection_state,
+                            side=attacker.team.value,
+                        )
                         
                         if unit.unit_type in [UnitType.TANK, UnitType.ARTILLERY]:
                             m_kill_prob = kill_probs.get(Status.M_KILL, 0.0)
@@ -135,6 +148,47 @@ class Fire:
                                 self.record_damage_cost(unit, old_status, status)
                                 affected_units.append((unit, old_status, status))
                                 break
+
+    def apply_self_dest_drone_damage(
+        self,
+        attacker: Unit,
+        impact_point: Tuple[float, float],
+        all_units: List[Unit],
+    ) -> None:
+        lethal_radius = _SELF_DEST_DRONE_LETHAL_RADIUS_M / PIXEL_TO_METER_SCALE
+
+        for unit in all_units:
+            if (
+                unit.team != attacker.team
+                and unit.status.value in ["ALIVE", "M_KILL", "MINOR"]
+                and unit.unit_type != UnitType.DRONE
+                and unit.unit_type != UnitType.SELF_DEST_DRONE
+            ):
+                impact_distance = calculate_point_distance(impact_point, unit.position)
+                if impact_distance > lethal_radius:
+                    continue
+
+                protection_state = self.get_protection_state(unit)
+                attack_distance = calculate_distance(attacker, unit) * PIXEL_TO_METER_SCALE
+                kill_probs = ProbabilitySystem.get_kill_probability(
+                    attacker.unit_type,
+                    unit.unit_type,
+                    attack_distance,
+                    protection_state,
+                    side=attacker.team.value,
+                )
+                if not kill_probs:
+                    continue
+
+                rand_val = random.random()
+                cumulative = 0.0
+                old_status = unit.status
+                for status, prob in kill_probs.items():
+                    cumulative += prob
+                    if rand_val <= cumulative:
+                        unit.update_status(status)
+                        self.record_damage_cost(unit, old_status, status)
+                        break
 
     def update_eligible_targets(self, unit: Unit, all_units: List[Unit]) -> None:
         """사격 가능한 타겟 목록 업데이트"""
@@ -223,8 +277,7 @@ class Fire:
         distance = calculate_distance(attacker, target)
         
         # 곡사화기인 경우 다른 방식으로 처리
-        # 자폭 드론도 곡사화기와 유사하게 처리 (탄착지점 계산 및 주변 유닛 피해 적용)
-        if attacker.unit_type == UnitType.ARTILLERY or attacker.unit_type == UnitType.SELF_DEST_DRONE:
+        if attacker.unit_type == UnitType.ARTILLERY:
             # 탄착지점 계산
             impact_point = self.calculate_impact_point(target.position, distance)
             
@@ -248,14 +301,29 @@ class Fire:
             
             # 탄착지점 주변의 모든 유닛에 대한 피해 적용
             self.record_fire_cost(attacker)
-            self.apply_artillery_damage(impact_point, all_units, current_time)
+            self.apply_artillery_damage(attacker, impact_point, all_units, current_time)
             attacker.update_action(Action.STOP)  # 사격 완료 후 STOP으로 변경
-            if attacker.unit_type == UnitType.SELF_DEST_DRONE:
-                # 자폭 드론은 사격과 동시에 자신도 피해를 입음
-                attacker.update_status(Status.K_KILL)  # 자폭 드론은 사격 후 즉시 파괴 처리
-                attacker.update_action(Action.STOP)
-                return None
-            
+            return None
+
+        if attacker.unit_type == UnitType.SELF_DEST_DRONE:
+            self.record_fire_cost(attacker)
+            protection_state = self.get_protection_state(target)
+            hit_prob = (
+                ProbabilitySystem.get_hit_probability(
+                    attacker.unit_type,
+                    target.unit_type,
+                    distance * PIXEL_TO_METER_SCALE,
+                    protection_state,
+                    side=attacker.team.value,
+                )
+                * self.terrain.get_hit_probability_multiplier(target.position)
+            )
+
+            if random.random() <= hit_prob:
+                self.apply_self_dest_drone_damage(attacker, target.position, all_units)
+
+            attacker.update_status(Status.K_KILL)
+            attacker.update_action(Action.STOP)
             return None
         
         # 직사화기 처리 (기존 코드)
@@ -273,7 +341,13 @@ class Fire:
         self.record_fire_cost(attacker)
         protection_state = self.get_protection_state(target)
         hit_prob = (
-            ProbabilitySystem.get_hit_probability(attacker.unit_type, target.unit_type, distance, protection_state)
+            ProbabilitySystem.get_hit_probability(
+                attacker.unit_type,
+                target.unit_type,
+                distance * PIXEL_TO_METER_SCALE,
+                protection_state,
+                side=attacker.team.value,
+            )
             * self.terrain.get_hit_probability_multiplier(target.position)
         )
         
@@ -281,7 +355,13 @@ class Fire:
 
         # 4. 살상확률 계산 및 상태 결정
         if hit_success:
-            kill_probs = ProbabilitySystem.get_kill_probability(attacker.unit_type, target.unit_type, distance, protection_state)
+            kill_probs = ProbabilitySystem.get_kill_probability(
+                attacker.unit_type,
+                target.unit_type,
+                distance * PIXEL_TO_METER_SCALE,
+                protection_state,
+                side=attacker.team.value,
+            )
                 
             if target.unit_type in [UnitType.TANK, UnitType.ARTILLERY]:
                 m_kill_prob = kill_probs.get(Status.M_KILL, 0.0)
