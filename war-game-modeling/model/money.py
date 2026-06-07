@@ -37,8 +37,9 @@ DEFAULT_DAMAGE_RATIO = {
 
 
 class MoneyTracker:
-    def __init__(self, money_config: Dict = None):
+    def __init__(self, money_config: Dict = None, platform_overrides: Dict = None):
         money_config = money_config or {}
+        self.platform_overrides = platform_overrides or {}
         self.fire_cost_by_type = self._load_unit_type_values(
             DEFAULT_FIRE_COST,
             money_config.get("fire_cost", {}),
@@ -66,8 +67,20 @@ class MoneyTracker:
             values[Status[key]] = float(value)
         return values
 
+    def _get_platform_override(self, team: Team, unit_type: UnitType, key: str):
+        value = (
+            self.platform_overrides
+            .get(team.name, {})
+            .get(unit_type.name, {})
+            .get(key)
+        )
+        return None if value is None else float(value)
+
     def record_fire(self, attacker: Unit) -> None:
-        self.fire_cost[attacker.team] += self.fire_cost_by_type.get(attacker.unit_type, 0.0)
+        cost = self._get_platform_override(attacker.team, attacker.unit_type, "fire_cost")
+        if cost is None:
+            cost = self.fire_cost_by_type.get(attacker.unit_type, 0.0)
+        self.fire_cost[attacker.team] += cost
 
     def record_damage(self, unit: Unit, old_status: Status, new_status: Status) -> None:
         old_ratio = self.damage_ratio_by_status.get(old_status, 0.0)
@@ -76,7 +89,9 @@ class MoneyTracker:
         if ratio_delta == 0.0:
             return
 
-        unit_value = self.unit_value_by_type.get(unit.unit_type, 0.0)
+        unit_value = self._get_platform_override(unit.team, unit.unit_type, "unit_value")
+        if unit_value is None:
+            unit_value = self.unit_value_by_type.get(unit.unit_type, 0.0)
         self.damage_cost[unit.team] += unit_value * ratio_delta
 
     def get_team_summary(self, team: Team) -> Dict[str, float]:

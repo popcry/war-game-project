@@ -145,7 +145,10 @@ class Simulation:
         self.map_height = self.config['simulation']['map_height_px']
 
         # 모델 컴포넌트 초기화
-        self.money_tracker = MoneyTracker(self.config.get('money', {}))
+        self.money_tracker = MoneyTracker(
+            self.config.get('money', {}),
+            self.config.get('platform_overrides', {}),
+        )
         self.movement = Movement()
         self.fire = Fire(self.money_tracker)
         self.detect = Detect()

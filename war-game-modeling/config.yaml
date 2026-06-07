@@ -210,7 +210,69 @@ units:
     speed_kmh: 5
     fire_interval: [2.0, 3.0]
 
-# --- 작전단계 (Phase) ---
+# --- Team/platform overrides (Platform & Weaponry) ---
+# Existing units/money values remain fallbacks when an override is absent.
+platform_overrides:
+  RED:
+    RIFLE:
+      speed_kmh: 3
+      unit_value: 500000
+      fire_cost: 500
+    ANTI_TANK:
+      speed_kmh: 3
+      unit_value: 0
+      fire_cost: 5000000
+    TANK:
+      speed_kmh: 36
+      unit_value: 4000000000
+      fire_cost: 2000000
+    ARTILLERY:
+      speed_kmh: 30
+      unit_value: 4000000000
+      fire_cost: 1500000
+    DRONE:
+      speed_kmh: 120
+      unit_value: 150000000
+      fire_cost: 0
+    SELF_DEST_DRONE:
+      speed_kmh: 90
+      unit_value: 50000000
+      fire_cost: 50000000
+    COMMAND_POST:
+      speed_kmh: 0
+      unit_value: 0
+      fire_cost: 0
+  BLUE:
+    RIFLE:
+      speed_kmh: 3
+      unit_value: 500000
+      fire_cost: 500
+    ANTI_TANK:
+      speed_kmh: 3
+      unit_value: 450000000
+      fire_cost: 130000000
+    TANK:
+      speed_kmh: 32
+      unit_value: 2000000000
+      fire_cost: 1500000
+    ARTILLERY:
+      speed_kmh: 28
+      unit_value: 9000000000
+      fire_cost: 4000000
+    DRONE:
+      speed_kmh: 54
+      unit_value: 3000000
+      fire_cost: 0
+    SELF_DEST_DRONE:
+      speed_kmh: 80
+      unit_value: 2000000
+      fire_cost: 2000000
+    COMMAND_POST:
+      speed_kmh: 0
+      unit_value: 0
+      fire_cost: 0
+
+# --- Phase ---
 # fire_priority 숫자가 낮을수록 포병 표적 우선순위 높음
 unit_overrides:
   RED:

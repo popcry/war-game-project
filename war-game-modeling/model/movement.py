@@ -16,6 +16,7 @@ PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
 _MOV_CFG = config['movement']
 _DRONE_CFG = config['drone']
 _UNITS_CFG = config['units']
+_PLATFORM_OVERRIDES = config.get('platform_overrides', {})
 _SCALING = config['scaling']
 _SPEED_DIV = _SCALING['speed_scale_divisor']
 _SPEED_TMUL = _SCALING['speed_time_multiplier']
@@ -23,6 +24,10 @@ _SPEED_TMUL = _SCALING['speed_time_multiplier']
 # kmh → px/s 변환식 (계수 config 기반): kmh /div *1000/3600 /pixel_to_meter_scale *tmul
 def _kmh_to_pxps(kmh: float) -> float:
     return kmh / _SPEED_DIV * 1000 / 3600 / PIXEL_TO_METER_SCALE * _SPEED_TMUL
+
+
+def _get_platform_override(team: Team, unit_type: UnitType, key: str):
+    return _PLATFORM_OVERRIDES.get(team.name, {}).get(unit_type.name, {}).get(key)
 
 
 class Movement:
@@ -51,7 +56,11 @@ class Movement:
 
     def get_unit_speed(self, unit: Unit, position: Tuple[float, float]) -> float:
         """유닛의 이동 속도 반환 (지형 영향 포함)"""
-        base_speed = self.UNIT_SPEEDS.get(unit.unit_type, 0.0)  # m/s
+        speed_override = _get_platform_override(unit.team, unit.unit_type, 'speed_kmh')
+        if speed_override is None:
+            base_speed = self.UNIT_SPEEDS.get(unit.unit_type, 0.0)  # m/s
+        else:
+            base_speed = _kmh_to_pxps(float(speed_override))
         decay_rate = self.terrain.get_terrain_decay_rate(unit, (int(position[0]), int(position[1])))
         return base_speed * decay_rate
 
