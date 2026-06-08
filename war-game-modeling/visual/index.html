@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wargame 3D Replay — Demo</title>
+  <style>
+    :root {
+      --blue: #4ea0ff;
+      --red:  #ff5b5b;
+      --bg:   #0b1116;
+      --panel: rgba(15, 22, 30, 0.78);
+      --text: #e6edf3;
+      --muted: #8b9aa8;
+      --accent: #ffd166;
+    }
+    html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+      font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif; overflow:hidden; }
+    #app { position:fixed; inset:0; }
+    canvas { display:block; }
+
+    .panel {
+      position:absolute; background:var(--panel); backdrop-filter: blur(8px);
+      border:1px solid #1f2a36; border-radius:10px; padding:12px 14px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    }
+    #stats   { top:14px; right:14px; min-width:200px; font-variant-numeric: tabular-nums; }
+    #help    { bottom:90px; right:14px; max-width:240px; font-size:12px; color:var(--muted); }
+    #viewer-label {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 32px; font-weight: 700; letter-spacing: 1.5px;
+      color: var(--text); text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75), 0 0 4px rgba(0,0,0,0.6);
+      pointer-events: none; user-select: none; opacity: 0; transition: opacity 0.25s ease;
+      text-align: center; white-space: nowrap;
+    }
+    #viewer-label.visible { opacity: 0.92; }
+    #viewer-label.blue { color: var(--blue); }
+    #viewer-label.red  { color: var(--red); }
+
+    #hover-tip {
+      position: fixed; pointer-events: none; z-index: 30;
+      padding: 7px 10px; font-size: 12px; line-height: 1.5;
+      display: none; white-space: nowrap;
+    }
+    #hover-tip.visible { display: block; }
+    #hover-tip .tip-team { font-weight: 700; letter-spacing: 0.5px; }
+    #hover-tip .tip-team.blue { color: var(--blue); }
+    #hover-tip .tip-team.red  { color: var(--red); }
+    #hover-tip .tip-k { color: var(--muted); margin-right: 6px; }
+    #hover-tip .tip-v { color: var(--text); }
+
+    #inspector { top:14px; left:14px; width:210px; display:none; }
+    #inspector.visible { display:block; }
+    #inspector .insp-head {
+      display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:8px;
+    }
+    #inspector .insp-title { font-size:13px; font-weight:600; }
+    #inspector .insp-close {
+      cursor:pointer; color:var(--muted); font-size:13px; line-height:1;
+      padding:2px 5px; border-radius:6px;
+    }
+    #inspector .insp-close:hover { color:var(--text); background:#1e2c3d; }
+    #inspector .insp-preview {
+      width:100%; height:170px; margin-bottom:8px; border-radius:8px;
+      overflow:hidden; background:rgba(0,0,0,0.28);
+    }
+    #inspector .insp-preview canvas { display:block; width:100%; height:100%; }
+    #inspector .insp-row {
+      display:flex; justify-content:space-between; font-size:12px; padding:3px 0;
+    }
+    #inspector .insp-k { color:var(--muted); }
+    #inspector .insp-v { color:var(--text); }
+    #inspector .insp-v.team-blue { color:var(--blue); font-weight:600; }
+    #inspector .insp-v.team-red  { color:var(--red);  font-weight:600; }
+    #inspector .insp-status { display:flex; align-items:center; gap:6px; }
+    #inspector .dot {
+      width:8px; height:8px; border-radius:50%; background:#8b9aa8;
+    }
+    #inspector .dot.operational   { background:#52d273; }
+    #inspector .dot.incapacitated { background:#f29e3c; }
+    #inspector .dot.destroyed     { background:var(--red); }
+
+
+    #stats .row { display:flex; justify-content:space-between; font-size:12px; padding:2px 0; }
+    #stats .label { color: var(--muted); }
+    #stats .row.team-head { margin-top:8px; padding-top:6px; border-top:1px solid #1f2a36; font-weight:600; font-size:13px; }
+    #stats .row.team-head.team-blue .team-name { color: var(--blue); }
+    #stats .row.team-head.team-red  .team-name { color: var(--red); }
+    #stats .row.sub { padding:1px 0 1px 12px; font-size:11px; }
+    #stats .alive { color: var(--text); }
+    #stats .row.sub .alive { color: var(--text); }
+    #stats .total { color: var(--muted); }
+    #stats .lost  { color: var(--red); margin-left:6px; font-size:11px; }
+    #stats .lost.zero { display:none; }
+    #stats .row.sub.depleted .alive { color: var(--red); }
+
+    /* Strength bars under each stats row.
+       Bar = flex container. Two stacked fills:
+         .op    — operational fraction, team color
+         .incap — incapacitated fraction, amber (still on field but disabled)
+       Missing portion = destroyed losses. */
+    #stats .bar {
+      height: 4px; background: rgba(255,255,255,0.07);
+      border-radius: 2px; overflow: hidden;
+      margin: 2px 0 5px;
+      display: flex;
+    }
+    #stats .bar.sub  { height: 3px; margin: 1px 0 3px 12px; opacity: 0.85; }
+    #stats .bar-fill { height: 100%; transition: width 0.35s ease; }
+    #stats .bar.team-blue .bar-fill.op { background: var(--blue); }
+    #stats .bar.team-red  .bar-fill.op { background: var(--red); }
+    #stats .bar-fill.incap { background: #f29e3c; opacity: 0.9; }
+    #stats .bar.depleted .bar-fill.op { background: #5a2a2a; }
+
+    /* Cost section (money.csv) — visualised as a balance scale. The team
+       with the higher cumulative spend pulls its end of the beam DOWN; pan
+       dots are color-coded (blue left, red right) and rotate with the beam.
+       Labels above the beam stay horizontal so the digits remain readable
+       even at full tilt. A compact Fire/Damage breakdown lives below. */
+    #cost-section { margin-top: 10px; padding-top: 8px; border-top: 1px solid #1f2a36; }
+    #cost-section .cost-title { font-size: 11px; color: var(--muted); letter-spacing: 0.5px; padding-bottom: 6px; }
+
+    #cost-balance { padding: 0 4px; }
+    #cost-balance .cb-labels { display:flex; justify-content:space-between; font-size:10px; line-height:1.2; margin-bottom: 6px; }
+    #cost-balance .cb-label { display:flex; flex-direction:column; }
+    #cost-balance .cb-label.cb-right { text-align:right; align-items:flex-end; }
+    #cost-balance .cb-team { font-weight:700; letter-spacing:0.5px; }
+    #cost-balance .cb-team.team-blue { color: var(--blue); }
+    #cost-balance .cb-team.team-red  { color: var(--red); }
+    #cost-balance .cb-amount { font-variant-numeric: tabular-nums; font-size:13px; font-weight:600; }
+
+    #cost-balance .cb-beam-wrap {
+      position: relative;
+      height: 34px;
+      margin: 4px 0 0;
+    }
+    #cost-balance .cb-beam {
+      position: absolute;
+      top: 14px;
+      left: 6%;
+      width: 88%;
+      height: 3px;
+      background: linear-gradient(to right, var(--blue) 0%, #6e7a8a 30%, #6e7a8a 70%, var(--red) 100%);
+      border-radius: 2px;
+      transform-origin: center center;
+      transform: rotate(0deg);
+      transition: transform 0.3s ease-out;
+    }
+    #cost-balance .cb-pan {
+      position: absolute;
+      top: -4px;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    #cost-balance .cb-pan-left  { left:  -5px; background: var(--blue); }
+    #cost-balance .cb-pan-right { right: -5px; background: var(--red);  }
+    #cost-balance .cb-pivot {
+      position: absolute;
+      top: 17px; left: 50%;
+      transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 7px solid transparent;
+      border-right: 7px solid transparent;
+      border-bottom: 12px solid #6a7280;   /* point UP — apex touches the beam from below */
+    }
+    #cost-balance .cb-base {
+      width: 60%; height: 2px;
+      margin: 0 auto;
+      background: #4a5260;
+      border-radius: 1px;
+    }
+
+    /* Fire/Damage breakdown beneath the scale — kept very compact so it
+       doesn't compete with the balance visual above. */
+    #cost-breakdown { margin-top: 8px; font-size: 10px; }
+    #cost-breakdown .cb-row { display:flex; justify-content:space-between; padding: 1px 0; }
+    #cost-breakdown .cb-row .cb-team-name { font-weight:600; letter-spacing:0.5px; }
+    #cost-breakdown .cb-row.team-blue .cb-team-name { color: var(--blue); }
+    #cost-breakdown .cb-row.team-red  .cb-team-name { color: var(--red); }
+    #cost-breakdown .cb-detail { color: var(--muted); font-variant-numeric: tabular-nums; }
+    #cost-breakdown .cb-detail .v { color: var(--text); }
+    #cost-breakdown .cb-detail .sep { padding: 0 4px; opacity: 0.4; }
+
+    #controls {
+      position:absolute; left:50%; transform:translateX(-50%); bottom:18px;
+      display:flex; align-items:center; gap:10px; padding:10px 14px;
+      background:var(--panel); border:1px solid #1f2a36; border-radius:12px;
+      backdrop-filter: blur(8px); width: min(820px, 92vw);
+    }
+    #controls button {
+      background:#172230; color:var(--text); border:1px solid #2a3a4d;
+      padding:6px 12px; border-radius:8px; cursor:pointer; font-size:13px;
+    }
+    #controls button:hover { background:#1e2c3d; }
+    #controls button.primary { background:var(--accent); color:#1a1300; border-color:transparent; font-weight:600; }
+    #scrub { flex:1; }
+    #time  { font-variant-numeric: tabular-nums; font-size:12px; color:var(--muted); min-width:90px; text-align:right; }
+    #speed { background:#172230; color:var(--text); border:1px solid #2a3a4d; padding:5px 8px; border-radius:8px; }
+
+    /* Slider styling */
+    input[type=range] { -webkit-appearance:none; appearance:none; height:4px; background:#243446; border-radius:4px; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance:none; width:14px; height:14px; background:var(--accent);
+      border-radius:50%; cursor:pointer; border:2px solid #1a1300;
+    }
+    input[type=range]::-moz-range-thumb {
+      width:14px; height:14px; background:var(--accent); border-radius:50%;
+      cursor:pointer; border:2px solid #1a1300;
+    }
+
+    /* ---------- Light theme override for the stats + inspector panels ----------
+       The bottom controls bar and the hover tooltip intentionally stay dark
+       (they float over the battlefield and need to recede). Only the side
+       info panels switch to a cream/off-white so the dense numeric content
+       reads more like a HUD card than a TV graphic.
+       Trick: redefining --text / --muted inside the panel rewrites every
+       descendant that references them, so individual rules don't need
+       per-element overrides. Hard-coded dark hex colors that exist in
+       specific rules (borders, bar backgrounds, hover states, the inspector
+       preview's dark backdrop) still need explicit light replacements. */
+    #stats, #inspector {
+      --text:  #1a2330;
+      --muted: #5a6878;
+      background: rgba(245, 248, 252, 0.94);
+      color: #1a2330;
+      border-color: #c7d0d8;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+    #stats .row.team-head { border-top-color: #d3d9e0; }
+    #stats .bar           { background: rgba(0, 0, 0, 0.08); }
+    #cost-section         { border-top-color: #d3d9e0; }
+    #inspector .insp-close:hover {
+      background: #dfe4ea;
+      color: #1a2330;
+    }
+    #inspector .insp-preview {
+      /* preview backdrop stays slightly recessed but no longer near-black —
+         a faint cool tint reads as "viewport" without going dark on light. */
+      background: rgba(0, 0, 0, 0.06);
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+<div id="stats" class="panel">
+    <div class="row"><span class="label">Time</span><span id="stat-time">0.0s / 0.0s</span></div>
+    <div id="stat-breakdown"></div>
+    <div id="cost-section"></div>
+  </div>
+
+  <div id="help" class="panel">
+    <div><b>Mouse</b>: drag rotate · wheel zoom · right-drag pan</div>
+    <div style="margin-top:4px;"><b>Space</b>: play/pause · <b>←/→</b>: ±2s · <b>C</b>: cinema · <b>D</b>: detection</div>
+  </div>
+
+  <div id="viewer-label"></div>
+
+  <div id="hover-tip" class="panel"></div>
+
+  <div id="inspector" class="panel">
+    <div class="insp-head">
+      <span class="insp-title">Unit</span>
+      <span class="insp-close" id="insp-close" title="Close">✕</span>
+    </div>
+    <div class="insp-preview"><canvas id="insp-canvas"></canvas></div>
+    <div class="insp-row"><span class="insp-k">Agent</span><span class="insp-v" id="insp-type">—</span></div>
+    <div class="insp-row"><span class="insp-k">Team</span><span class="insp-v" id="insp-team">—</span></div>
+    <div class="insp-row"><span class="insp-k">ID</span><span class="insp-v" id="insp-id">—</span></div>
+    <div class="insp-row"><span class="insp-k">Status</span>
+      <span class="insp-v insp-status">
+        <span class="dot" id="insp-dot"></span><span id="insp-status">—</span>
+      </span>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="btn-play" class="primary">▶ Play</button>
+    <button id="btn-restart">⟲</button>
+    <button id="btn-cinema">📽 Cinema: ON</button>
+    <button id="btn-sound">🔊 Sound: ON</button>
+    <button id="btn-detect">🛰 Detection: ON</button>
+    <input id="scrub" type="range" min="0" max="1000" value="0" step="1" />
+    <span id="time">0.0s / 0.0s</span>
+    <select id="speed">
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+      <option value="4">4×</option>
+      <option value="8">8×</option>
+    </select>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
