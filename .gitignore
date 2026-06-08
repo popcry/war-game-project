@@ -30,6 +30,6 @@ vuhledar_terrain_project/vuhledar_bbox_5x/data_processed/terrain_grid_30m.gpkg
 # War-game simulation generated artifacts
 war-game-modeling/.tile_cache/
 war-game-modeling/frames/
-war-game-modeling/results/
+#war-game-modeling/results/
 war-game-modeling/test/
 word_files/
