@@ -417,6 +417,10 @@ python build_vuhledar_terrain.py --dem-path C:\path\to\dem.tif
 
 시뮬레이션이 떨어뜨린 `results/`의 CSV를 three.js 기반으로 재생하는 웹 뷰어입니다.
 
+![3D 리플레이 뷰어 예시](docs/visual_example.png)
+
+> Vuhledar 지형(참호=보라색) 위 Blue/Red 교전 장면. 좌측 하단에 시네마틱 시점 라벨(Red Drone 1 View), 우측 Stats 패널(시간·진영별 전력·비용), 가운데 드론 정찰 범위(반투명 원), 하단 컨트롤 바(Play / Cinema / Sound / Detection).
+
 ### 구동 방법
 
 뷰어(`visual/`)는 한 단계 위의 `results/`를 `../results/`로 참조합니다. 따라서 **서버는 `visual/`과 `results/`를 모두 포함하는 `war-game-modeling/`에서** 띄워야 합니다.
