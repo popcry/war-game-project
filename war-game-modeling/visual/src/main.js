@@ -6,6 +6,7 @@ import { loadMoneyFromCsv, sampleMoney } from './moneyLoader.js';
 import { CinematicDirector, loadCameraSchedule } from './cinematic.js';
 import { EffectsManager, attachDamageEffect, createStatusRing } from './effects.js';
 import { DetectionOverlay } from './detection.js';
+import { openBattleGraph } from './graphWindow.js';
 
 const TEAM_PRIMARY_HEX = { blue: 0x4ea0ff, red: 0xff5b5b };
 const INCAP_RING_HEX   = 0xffd166;
@@ -1324,6 +1325,37 @@ $btnDetect.addEventListener('click', () => {
   if (detection) detection.setEnabled(!detection.isEnabled());
   refreshDetectButton();
 });
+
+// ---------- Battle graph popup ----------
+// 전투량(생존 유닛 수, 하락) + 금액(money.csv 누적 소비 비용, 상승)의 전체 타임라인을
+// 별도 창에 라인차트로 띄운다. 1초 간격으로 샘플링한다.
+function buildGraphData() {
+  const step = 1.0;
+  const times = [];
+  for (let t = 0; t <= scenario.duration + 1e-6; t += step) times.push(+t.toFixed(3));
+
+  const series = { red: { units: [], cost: [] }, blue: { units: [], cost: [] } };
+  for (const t of times) {
+    // 전투량 — 파괴(k_kill)되지 않은 유닛 수 (작전/무력화 모두 "전장에 남음")
+    const cnt = { red: 0, blue: 0 };
+    for (const ag of agents) {
+      const s = sampleAt(ag.spec.track, t, 0);
+      if (s.status !== 'k_kill' && cnt[ag.spec.team] !== undefined) cnt[ag.spec.team] += 1;
+    }
+    series.red.units.push({ t, n: cnt.red });
+    series.blue.units.push({ t, n: cnt.blue });
+
+    // 금액 — money.csv 누적 비용 (step-hold 샘플)
+    for (const team of TEAM_ORDER) {
+      const m = sampleMoney(moneySeries[team], t, 0);
+      series[team].cost.push({ t, total: m.total });
+    }
+  }
+  return { duration: scenario.duration, currentTime, series };
+}
+
+const $btnGraph = document.getElementById('btn-graph');
+$btnGraph?.addEventListener('click', () => openBattleGraph(buildGraphData()));
 
 $scrub.addEventListener('input', e => {
   scrubbing = true;
