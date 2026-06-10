@@ -477,7 +477,10 @@ class Simulation:
         if max_time is None:
             max_time = self.max_time
             
-        print(f"Starting simulation with max_time: {max_time}")
+        print(f"Starting simulation with max_time: {max_time}", flush=True)
+        start_wall_time = time.perf_counter()
+        tick_count = 0
+        total_ticks = max(1, int((max_time - self.current_time + self.sim_speed - 1e-9) / self.sim_speed))
         last_visualization_time = 0.0
         visualization_interval = 1 / self.time_scale  # Match simulation speed with visualization
 
@@ -487,6 +490,17 @@ class Simulation:
 
 
         while self.current_time < max_time:
+            tick_count += 1
+            if tick_count % 10 == 0:
+                elapsed = time.perf_counter() - start_wall_time
+                reported_time = min(max_time, self.current_time + self.sim_speed)
+                progress = min(100.0, (reported_time / max_time) * 100.0) if max_time else 0.0
+                print(
+                    f"Progress: tick {tick_count}/{total_ticks} "
+                    f"(t={reported_time:.1f}/{max_time:.1f}s, {progress:.1f}%) "
+                    f"elapsed={elapsed:.1f}s",
+                    flush=True,
+                )
             # pygame 이벤트 처리 (headless가 아닐 때만)
             if not self.headless:
                 for event in pygame.event.get():

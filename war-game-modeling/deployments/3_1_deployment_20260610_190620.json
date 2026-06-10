@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "3_3_deployment_20260610_190620",
+  "name": "3_1_deployment_20260610_190620",
   "mapPath": "database/background_5x.png",
   "mapWidth": 1200,
   "mapHeight": 875,
@@ -534,70 +534,6 @@
       "quantity": 1
     },
     {
-      "id": "UA-UAV-R-01",
-      "team": "BLUE",
-      "unitType": "DRONE",
-      "x": 632,
-      "y": 421,
-      "quantity": 3
-    },
-    {
-      "id": "UA-UAV-R-02",
-      "team": "BLUE",
-      "unitType": "DRONE",
-      "x": 784,
-      "y": 399,
-      "quantity": 3
-    },
-    {
-      "id": "UA-UAV-R-03",
-      "team": "BLUE",
-      "unitType": "DRONE",
-      "x": 709,
-      "y": 505,
-      "quantity": 3
-    },
-    {
-      "id": "UA-FPV-01",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 601,
-      "y": 362,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-02",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 806,
-      "y": 225,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-03",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 701,
-      "y": 276,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-04",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 577,
-      "y": 463,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-05",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 549,
-      "y": 387,
-      "quantity": 5
-    },
-    {
       "id": "UA-ART-01",
       "team": "BLUE",
       "unitType": "ARTILLERY",
@@ -630,69 +566,5 @@
       "quantity": 1
     }
   ],
-  "trenches": [
-    {
-      "id": "TR-01",
-      "points": [
-        {
-          "x": 382,
-          "y": 403
-        },
-        {
-          "x": 382,
-          "y": 375
-        },
-        {
-          "x": 429,
-          "y": 376
-        },
-        {
-          "x": 427,
-          "y": 403
-        }
-      ]
-    },
-    {
-      "id": "TR-02",
-      "points": [
-        {
-          "x": 627,
-          "y": 288
-        },
-        {
-          "x": 626,
-          "y": 255
-        },
-        {
-          "x": 576,
-          "y": 255
-        },
-        {
-          "x": 577,
-          "y": 288
-        }
-      ]
-    },
-    {
-      "id": "TR-03",
-      "points": [
-        {
-          "x": 382,
-          "y": 503
-        },
-        {
-          "x": 383,
-          "y": 478
-        },
-        {
-          "x": 431,
-          "y": 475
-        },
-        {
-          "x": 428,
-          "y": 503
-        }
-      ]
-    }
-  ]
+  "trenches": []
 }
