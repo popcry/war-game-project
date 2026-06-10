@@ -71,6 +71,12 @@ def _target_status_candidates(protection_state: str) -> list:
     return _TARGET_STATUS_BY_PROTECTION.get(protection_state, ["All"])
 
 
+def _damage_logic_target_type(target_type: UnitType) -> UnitType:
+    if target_type == UnitType.ANTI_TANK:
+        return UnitType.RIFLE
+    return target_type
+
+
 class ProbabilitySystem:
     damage_logics = _build_table('damage_logics')
 
@@ -178,9 +184,10 @@ class ProbabilitySystem:
         protection_state: str,
         side: Optional[str] = None,
     ) -> Optional[pd.Series]:
+        logic_target_type = _damage_logic_target_type(target_type)
         rows = cls.damage_logics[
             (cls.damage_logics["Attacker"] == attacker_type.name)
-            & (cls.damage_logics["Target"] == target_type.name)
+            & (cls.damage_logics["Target"] == logic_target_type.name)
         ]
 
         normalized_side = _normalize_side(side)

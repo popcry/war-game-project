@@ -60,8 +60,8 @@ fire:
   # If multiple targets have the same priority type, the nearest one is selected.
   target_priority:
     RIFLE: [RIFLE, DRONE, ANTI_TANK]
-    ARTILLERY: [TANK, RIFLE]
-    TANK: [TANK, ANTI_TANK, RIFLE]
+    ARTILLERY: [TANK, RIFLE, COMMAND_POST]
+    TANK: [TANK, ANTI_TANK, RIFLE, COMMAND_POST]
     ANTI_TANK: [TANK]
     DRONE: [TANK, RIFLE]
     SELF_DEST_DRONE: [TANK, RIFLE]
