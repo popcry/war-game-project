@@ -44,3 +44,12 @@ war-game-modeling/outputs/vuhledar_slope_map.png
 war-game-modeling/outputs/vuhledar_static_map.png
 war-game-modeling/outputs/vuhledar_terrain_classification_map.png
 war-game-modeling/outputs/vuhledar_terrain_grid_map.html
+
+# results/ artifacts not consumed by the 3D viewer. The viewer only reads
+# cameras.json, money.csv, simulation.csv, vuhledar_height_grid.png and
+# vuhledar_trench_mask.csv; the rest are legacy/alternate datasets.
+war-game-modeling/results/battle.csv
+war-game-modeling/results/kaist_simulation_short.csv
+war-game-modeling/results/kaist_simulation_ver1.csv
+war-game-modeling/results/terrain.dem
+war-game-modeling/results/terrain.json
