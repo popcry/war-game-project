@@ -630,12 +630,77 @@
       "quantity": 1
     }
   ],
+  "trenches": [
+    {
+      "id": "TR-01",
+      "points": [
+        {
+          "x": 330,
+          "y": 410
+        },
+        {
+          "x": 330,
+          "y": 430
+        },
+        {
+          "x": 370,
+          "y": 430
+        },
+        {
+          "x": 370,
+          "y": 410
+        }
+      ]
+    },
+    {
+      "id": "TR-02",
+      "points": [
+        {
+          "x": 505,
+          "y": 515
+        },
+        {
+          "x": 505,
+          "y": 535
+        },
+        {
+          "x": 545,
+          "y": 535
+        },
+        {
+          "x": 545,
+          "y": 515
+        }
+      ]
+    },
+    {
+      "id": "TR-03",
+      "points": [
+        {
+          "x": 340,
+          "y": 335
+        },
+        {
+          "x": 340,
+          "y": 355
+        },
+        {
+          "x": 380,
+          "y": 355
+        },
+        {
+          "x": 380,
+          "y": 335
+        }
+      ]
+    }
+  ],
   "metadata": {
     "sourceWorkbook": "C:\\Users\\user\\Downloads\\?? ? ?? ??.xlsx",
     "sourceSheetIndex": 0,
     "coordinateColumn": "????",
     "createdAt": "2026-06-10T16:01:13",
-    "notes": "Converted from initial coordinates only. TR trench rows were skipped because deployment files currently place unit platforms only.",
+    "notes": "Converted from initial coordinates. TR-01 through TR-03 were added as 4-point trench rectangles from the provided coordinate table.",
     "quantityMapping": {
       "RIFLE": 9,
       "ANTI_TANK": 2,

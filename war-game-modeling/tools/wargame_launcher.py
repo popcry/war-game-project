@@ -323,7 +323,6 @@ INDEX_HTML = r"""<!doctype html>
       overflow: hidden;
       height: var(--map-panel-height, 620px);
       min-height: 420px;
-      max-height: 90vh;
     }
 
     .map-head {
@@ -559,7 +558,7 @@ INDEX_HTML = r"""<!doctype html>
           <button id="drawTrenchBtn" class="btn">Draw trench</button>
           <button id="cancelTrenchBtn" class="btn" disabled>Cancel trench</button>
           <button id="clearDeploymentBtn" class="btn">Clear map</button>
-          <button id="loadDeploymentBtn" class="btn">Load file</button>
+          <button id="loadDeploymentBtn" class="btn" disabled>Load saved</button>
           <button id="loadLocalDeploymentBtn" class="btn">Load local</button>
         </div>
         <label class="field" style="margin-top: 10px;">Save name
@@ -599,7 +598,7 @@ INDEX_HTML = r"""<!doctype html>
           </div>
           <div class="map-controls">
             <div class="subtle" id="mapCoords">x: -, y: -</div>
-            <label class="subtle">Height <input id="mapHeightSlider" type="range" min="420" max="900" step="20" value="620"></label>
+            <label class="subtle">Height <input id="mapHeightSlider" type="range" min="420" max="1600" step="20" value="620"></label>
           </div>
         </div>
         <div class="map-wrap">
@@ -860,6 +859,11 @@ INDEX_HTML = r"""<!doctype html>
       updatePreview();
     }
 
+    function updateLoadDeploymentButton() {
+      const button = document.getElementById("loadDeploymentBtn");
+      button.disabled = !ids.deploymentFiles.value;
+    }
+
     function refreshDeploymentFiles(items) {
       ids.deploymentFiles.innerHTML = "";
       const prompt = document.createElement("option");
@@ -875,6 +879,7 @@ INDEX_HTML = r"""<!doctype html>
         option.textContent = item.name;
         ids.deploymentFiles.appendChild(option);
       }
+      updateLoadDeploymentButton();
     }
 
     async function loadDeploymentDefaults() {
@@ -990,27 +995,49 @@ INDEX_HTML = r"""<!doctype html>
     function findTrenchHit(point) {
       for (let i = (deployment.trenches || []).length - 1; i >= 0; i -= 1) {
         const trench = deployment.trenches[i];
-        const points = trench.points || [];
-        if (points.length !== 4) continue;
-        for (let index = 0; index < points.length; index += 1) {
-          const corner = points[index];
-          const dx = point.x - corner.x;
-          const dy = point.y - corner.y;
-          if (Math.sqrt(dx * dx + dy * dy) <= 13) {
-            return { trench, pointIndex: index };
-          }
+        if (trench.id === selectedTrenchId) continue;
+        const hit = trenchHit(trench, point, 13, 9);
+        if (hit) return hit;
+      }
+      return null;
+    }
+
+    function trenchHit(trench, point, cornerRadius, edgeRadius) {
+      const points = trench.points || [];
+      if (points.length !== 4) return null;
+      for (let index = 0; index < points.length; index += 1) {
+        const corner = points[index];
+        const dx = point.x - corner.x;
+        const dy = point.y - corner.y;
+        if (Math.sqrt(dx * dx + dy * dy) <= cornerRadius) {
+          return { trench, pointIndex: index };
         }
-        for (let index = 0; index < points.length; index += 1) {
-          const next = points[(index + 1) % points.length];
-          if (distanceToSegment(point, points[index], next) <= 9) {
-            return { trench, pointIndex: null };
-          }
-        }
-        if (pointInPolygon(point, points)) {
+      }
+      for (let index = 0; index < points.length; index += 1) {
+        const next = points[(index + 1) % points.length];
+        if (distanceToSegment(point, points[index], next) <= edgeRadius) {
           return { trench, pointIndex: null };
         }
       }
+      if (pointInPolygon(point, points)) {
+        return { trench, pointIndex: null };
+      }
       return null;
+    }
+
+    function findSelectedTrenchHit(point) {
+      if (!selectedTrenchId) return null;
+      const trench = (deployment.trenches || []).find((item) => item.id === selectedTrenchId);
+      return trench ? trenchHit(trench, point, 22, 16) : null;
+    }
+
+    function findSelectedPlacement(point) {
+      if (!selectedPlacementId) return null;
+      const item = deployment.placements.find((entry) => entry.id === selectedPlacementId);
+      if (!item) return null;
+      const dx = point.x - item.x;
+      const dy = point.y - item.y;
+      return Math.sqrt(dx * dx + dy * dy) <= 24 ? item : null;
     }
 
     function updateTrenchButtons() {
@@ -1105,6 +1132,118 @@ INDEX_HTML = r"""<!doctype html>
       return team === "RED" ? "#b83d4c" : "#2367d1";
     }
 
+    function drawTrenchShape(trench, selected) {
+      const points = trench.points || [];
+      if (points.length !== 4) return;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let index = 1; index < points.length; index += 1) {
+        ctx.lineTo(points[index].x, points[index].y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = selected ? "rgba(168, 102, 17, 0.44)" : "rgba(168, 102, 17, 0.22)";
+      ctx.fill();
+      ctx.lineWidth = selected ? 5 : 2;
+      ctx.strokeStyle = selected ? "#101820" : "#8a5a1c";
+      ctx.stroke();
+
+      const center = points.reduce((acc, point) => ({ x: acc.x + point.x / 4, y: acc.y + point.y / 4 }), { x: 0, y: 0 });
+      ctx.fillStyle = "#101820";
+      ctx.font = selected ? "900 13px Segoe UI, sans-serif" : "800 12px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("TR", center.x, center.y);
+
+      if (selected) {
+        for (const point of points) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
+          ctx.fillStyle = "#ffffff";
+          ctx.fill();
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = "#101820";
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawPlacementMarker(item, selected) {
+      const color = teamColor(item.team);
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, selected ? 15 : 10, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = selected ? 5 : 2;
+      ctx.strokeStyle = selected ? "#101820" : "rgba(255,255,255,0.85)";
+      ctx.stroke();
+      if (selected) {
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, 20, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+      }
+
+      ctx.font = "700 12px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(symbols[item.unitType] || item.unitType.slice(0, 2), item.x, item.y);
+
+      if (item.quantity > 1) {
+        ctx.fillStyle = "#101820";
+        ctx.beginPath();
+        ctx.arc(item.x + 13, item.y - 13, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "700 10px Segoe UI, sans-serif";
+        ctx.fillText(String(item.quantity), item.x + 13, item.y - 13);
+      }
+    }
+
+    function drawTrenchDraft() {
+      if (trenchDraft.length === 0) return;
+      ctx.beginPath();
+      ctx.moveTo(trenchDraft[0].x, trenchDraft[0].y);
+      for (let index = 1; index < trenchDraft.length; index += 1) {
+        ctx.lineTo(trenchDraft[index].x, trenchDraft[index].y);
+      }
+      ctx.strokeStyle = "#101820";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (const point of trenchDraft) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = "#a86611";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+      }
+    }
+
+    function drawPendingPoint() {
+      if (!pendingPoint) return;
+      ctx.strokeStyle = "#101820";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pendingPoint.x - 14, pendingPoint.y);
+      ctx.lineTo(pendingPoint.x + 14, pendingPoint.y);
+      ctx.moveTo(pendingPoint.x, pendingPoint.y - 14);
+      ctx.lineTo(pendingPoint.x, pendingPoint.y + 14);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(pendingPoint.x, pendingPoint.y, 10, 0, Math.PI * 2);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.strokeStyle = "#101820";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     function drawMap() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (mapImage.complete && mapImage.naturalWidth > 0) {
@@ -1115,109 +1254,18 @@ INDEX_HTML = r"""<!doctype html>
       }
 
       for (const trench of deployment.trenches || []) {
-        const points = trench.points || [];
-        if (points.length !== 4) continue;
-        const selected = trench.id === selectedTrenchId;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let index = 1; index < points.length; index += 1) {
-          ctx.lineTo(points[index].x, points[index].y);
-        }
-        ctx.closePath();
-        ctx.fillStyle = selected ? "rgba(168, 102, 17, 0.36)" : "rgba(168, 102, 17, 0.24)";
-        ctx.fill();
-        ctx.lineWidth = selected ? 4 : 2;
-        ctx.strokeStyle = selected ? "#101820" : "#8a5a1c";
-        ctx.stroke();
-
-        const center = points.reduce((acc, point) => ({ x: acc.x + point.x / 4, y: acc.y + point.y / 4 }), { x: 0, y: 0 });
-        ctx.fillStyle = "#101820";
-        ctx.font = "800 12px Segoe UI, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("TR", center.x, center.y);
-
-        if (selected) {
-          for (const point of points) {
-            ctx.beginPath();
-            ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
-            ctx.fillStyle = "#ffffff";
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#101820";
-            ctx.stroke();
-          }
-        }
+        if (trench.id !== selectedTrenchId) drawTrenchShape(trench, false);
       }
-
-      if (trenchDraft.length > 0) {
-        ctx.beginPath();
-        ctx.moveTo(trenchDraft[0].x, trenchDraft[0].y);
-        for (let index = 1; index < trenchDraft.length; index += 1) {
-          ctx.lineTo(trenchDraft[index].x, trenchDraft[index].y);
-        }
-        ctx.strokeStyle = "#101820";
-        ctx.lineWidth = 3;
-        ctx.setLineDash([8, 6]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        for (const point of trenchDraft) {
-          ctx.beginPath();
-          ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
-          ctx.fillStyle = "#a86611";
-          ctx.fill();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "#ffffff";
-          ctx.stroke();
-        }
-      }
-
-      if (pendingPoint) {
-        ctx.strokeStyle = "#101820";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(pendingPoint.x - 14, pendingPoint.y);
-        ctx.lineTo(pendingPoint.x + 14, pendingPoint.y);
-        ctx.moveTo(pendingPoint.x, pendingPoint.y - 14);
-        ctx.lineTo(pendingPoint.x, pendingPoint.y + 14);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(pendingPoint.x, pendingPoint.y, 10, 0, Math.PI * 2);
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        ctx.strokeStyle = "#101820";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-
+      drawTrenchDraft();
+      drawPendingPoint();
       for (const item of deployment.placements) {
-        const color = teamColor(item.team);
-        const selected = item.id === selectedPlacementId;
-        ctx.beginPath();
-        ctx.arc(item.x, item.y, selected ? 13 : 10, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.lineWidth = selected ? 4 : 2;
-        ctx.strokeStyle = selected ? "#ffffff" : "rgba(255,255,255,0.85)";
-        ctx.stroke();
-
-        ctx.font = "700 12px Segoe UI, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(symbols[item.unitType] || item.unitType.slice(0, 2), item.x, item.y);
-
-        if (item.quantity > 1) {
-          ctx.fillStyle = "#101820";
-          ctx.beginPath();
-          ctx.arc(item.x + 13, item.y - 13, 9, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#ffffff";
-          ctx.font = "700 10px Segoe UI, sans-serif";
-          ctx.fillText(String(item.quantity), item.x + 13, item.y - 13);
-        }
+        if (item.id !== selectedPlacementId) drawPlacementMarker(item, false);
       }
+
+      const selectedTrench = (deployment.trenches || []).find((item) => item.id === selectedTrenchId);
+      if (selectedTrench) drawTrenchShape(selectedTrench, true);
+      const selectedPlacement = deployment.placements.find((item) => item.id === selectedPlacementId);
+      if (selectedPlacement) drawPlacementMarker(selectedPlacement, true);
     }
 
     function renderDeployment() {
@@ -1271,6 +1319,7 @@ INDEX_HTML = r"""<!doctype html>
         });
         refreshDeploymentFiles(data.deployments || []);
         ids.deploymentFiles.value = data.file;
+        updateLoadDeploymentButton();
         loadedDeploymentFile = data.file;
         setDeployment(data.deployment);
         deploymentStatus.textContent = "Saved " + data.file;
@@ -1281,7 +1330,11 @@ INDEX_HTML = r"""<!doctype html>
 
     async function loadSelectedDeployment() {
       const file = ids.deploymentFiles.value;
-      if (!file) return;
+      if (!file) {
+        deploymentStatus.textContent = "Choose a saved deployment first";
+        updateLoadDeploymentButton();
+        return;
+      }
       try {
         const data = await api("/api/deployments/" + encodeURIComponent(file));
         setDeployment(data.deployment);
@@ -1411,6 +1464,7 @@ INDEX_HTML = r"""<!doctype html>
     }
     ids.teamSelect.addEventListener("change", setQuantityFromSquad);
     ids.unitSelect.addEventListener("change", setQuantityFromSquad);
+    ids.deploymentFiles.addEventListener("change", updateLoadDeploymentButton);
     ids.mapSelect.addEventListener("change", () => {
       deployment.mapPath = ids.mapSelect.value;
       deployment.mapWidth = 0;
@@ -1439,6 +1493,28 @@ INDEX_HTML = r"""<!doctype html>
       const point = canvasPoint(event);
       if (drawingTrench) {
         addTrenchPoint(point);
+        return;
+      }
+      const selectedTrenchHit = findSelectedTrenchHit(point);
+      if (selectedTrenchHit) {
+        selectedPlacementId = null;
+        selectedTrenchId = selectedTrenchHit.trench.id;
+        dragTrench = {
+          id: selectedTrenchHit.trench.id,
+          pointIndex: selectedTrenchHit.pointIndex,
+          lastPoint: point,
+        };
+        pendingPoint = null;
+        renderDeployment();
+        return;
+      }
+      const selectedPlacementHit = findSelectedPlacement(point);
+      if (selectedPlacementHit) {
+        selectedPlacementId = selectedPlacementHit.id;
+        selectedTrenchId = null;
+        dragPlacementId = selectedPlacementHit.id;
+        pendingPoint = null;
+        renderDeployment();
         return;
       }
       const hit = findPlacement(point);
@@ -1536,6 +1612,7 @@ INDEX_HTML = r"""<!doctype html>
 
     updatePreview();
     updateTrenchButtons();
+    updateLoadDeploymentButton();
     loadDefaults();
     loadDeploymentDefaults();
     refreshStatus();

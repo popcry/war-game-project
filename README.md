@@ -26,6 +26,9 @@ wargame/
 │   ├── config.yaml             # 모든 하이퍼파라미터 (유닛/지형/확률/작전/자금 등)
 │   ├── model/                  # 도메인 모듈 (아래 "모듈 구성" 참조)
 │   ├── database/               # 배경 이미지, DEM, 지형 레이어(참호/도로/하천) CSV, 사운드
+│   ├── deployments/            # 런처 UI에서 저장한 수동 초기 배치 JSON
+│   ├── tools/wargame_launcher.py # CLI 실행과 초기 배치를 조작하는 로컬 웹 런처
+│   ├── runs/                   # 런처 실행별 config/output/log 스냅샷 — gitignore
 │   └── results/                # 실행 결과물 (simulation.csv, money.csv, simulation.mp4) — gitignore
 ├── vuhledar_terrain_project/   # Vuhledar AOI 지형 격자 생성 도구
 │   └── build_vuhledar_terrain.py
@@ -306,6 +309,69 @@ SDL_VIDEODRIVER=dummy python simulation.py --headless --no-video --max-time 600 
 - `--no-hold`: 종료 시 창을 닫고 즉시 종료 (배치 실행용)
 
 시뮬레이션 세부 값은 `war-game-modeling/config.yaml`에서 조정합니다.
+
+### 워게임 런처 UI
+
+CLI 옵션과 수동 초기 배치를 브라우저에서 설정하려면 로컬 런처를 사용합니다.
+
+```powershell
+cd war-game-modeling
+python tools/wargame_launcher.py
+```
+
+기본 주소는 `http://127.0.0.1:8765/`입니다. 브라우저 자동 열기를 끄거나 포트를 바꾸려면 다음처럼 실행합니다.
+
+```powershell
+python tools/wargame_launcher.py --no-browser --port 8766
+```
+
+런처는 기존 `simulation.py`와 `config.yaml`을 직접 수정하지 않고, 실행할 때마다 `war-game-modeling/runs/<run-id>/workspace/`에 실행용 작업 폴더를 만듭니다. 수동 배치를 켠 상태로 실행하면 런처가 그 run 전용 `config.yaml`을 생성하고, 적용된 배치는 `deployment.applied.json`으로 함께 저장합니다.
+
+주요 기능:
+
+- **실행 설정**: time scale, sim speed, max time, 탐지선/사격 가능 표적선/사격선 표시, 영상 비활성화, 종료 후 자동 닫기 옵션을 UI에서 설정합니다.
+- **프리셋**: `Data run`, `Visual debug`, `Video run`, `Default` 버튼으로 자주 쓰는 실행 설정을 빠르게 불러옵니다.
+- **지도 선택**: `database/*.png` 배경 지도를 선택할 수 있습니다. 지도를 바꾸면 기본 상태는 배치가 비어 있는 상태이며, 저장 파일을 불러오거나 직접 추가해야 유닛/참호가 표시됩니다.
+- **배치 지도 높이**: Deployment Map의 `Height` 슬라이더로 지도 패널 높이를 조절합니다. 최대 `1600px`까지 늘릴 수 있고, 값은 브라우저 localStorage에 저장됩니다.
+- **유닛 배치**: Team, Platform, Quantity를 고른 뒤 지도에서 위치를 찍고 `Add selected`를 누르면 해당 플랫폼 묶음이 추가됩니다. 추가된 유닛 앵커는 드래그로 이동하고 `Delete selected`로 삭제할 수 있습니다.
+- **참호 배치**: `Draw trench`를 누른 뒤 지도에서 네 꼭짓점을 차례대로 클릭하면 4점 사각형 참호가 추가됩니다. 선택된 참호는 유닛 위에 강조 표시되며, 꼭짓점 핸들을 드래그해 형태를 수정하거나 참호 내부를 드래그해 전체를 이동할 수 있습니다.
+- **선택 우선순위**: 선택된 유닛 또는 참호는 항상 지도 최상단에 그려지고, 클릭/드래그 판정도 선택된 객체가 먼저 가져갑니다. 유닛과 참호가 겹쳐도 선택한 객체를 계속 수정하기 쉽게 하기 위한 동작입니다.
+- **배치 저장/로드**: `Save deployment`는 현재 이름으로 `deployments/*.json`에 저장합니다. `Save as new`는 타임스탬프가 붙은 새 파일로 저장합니다. `Saved file`에서 파일을 고르면 `Load saved` 버튼이 활성화되고, 누르면 해당 JSON을 지도에 불러옵니다. PC의 JSON 파일을 직접 불러올 때는 `Local JSON`과 `Load local`을 사용합니다.
+- **JSON 다운로드**: `Download JSON`은 현재 UI 상태를 브라우저 다운로드 파일로 내보냅니다.
+- **수동 배치 실행**: `Use manual deployment`가 켜져 있으면 현재 UI 배치가 실행 config에 반영됩니다. 유닛은 `initial_positions`와 유닛 수 카운트로 변환되고, 참호는 run workspace의 `launcher_trench_mask.csv`로 래스터화되어 해당 run의 `terrain.trench_mask_file`에 연결됩니다.
+- **실행 결과 확인**: `Run simulation`으로 실행하면 로그가 UI에 스트리밍되고, 종료 후 `deployment.applied.json`, CSV, MP4 등 복사된 출력물이 run 패널에 링크로 표시됩니다.
+
+배치 JSON의 핵심 구조:
+
+```json
+{
+  "name": "manual_deployment",
+  "mapPath": "database/background_5x.png",
+  "mapWidth": 1200,
+  "mapHeight": 875,
+  "placements": [
+    {
+      "id": "UA-CP-01",
+      "team": "BLUE",
+      "unitType": "COMMAND_POST",
+      "x": 320,
+      "y": 470,
+      "quantity": 1
+    }
+  ],
+  "trenches": [
+    {
+      "id": "TR-01",
+      "points": [
+        { "x": 330, "y": 410 },
+        { "x": 330, "y": 430 },
+        { "x": 370, "y": 430 },
+        { "x": 370, "y": 410 }
+      ]
+    }
+  ]
+}
+```
 
 ---
 
