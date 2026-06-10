@@ -34,6 +34,7 @@ function parseCsvText(text) {
   const hasYaw = 'yaw' in idx;
   const hasEvent = 'event' in idx;
   const hasTarget = 'target' in idx;
+  const hasDamagedBy = 'damaged_by' in idx;
 
   // 5-state NATO kill classification with legacy 3-state / boolean fallback.
   // Downstream renderer collapses (f_kill, m_kill, mf_kill) into one visual
@@ -77,6 +78,7 @@ function parseCsvText(text) {
       alive:  status !== 'k_kill',
       event:  hasEvent  ? (f[idx.event]  ?? '').trim() : '',
       target: hasTarget ? (f[idx.target] ?? '').trim() : '',
+      damagedBy: hasDamagedBy ? (f[idx.damaged_by] ?? '').trim() : '',
     };
   }
   return rows;
@@ -85,6 +87,8 @@ function parseCsvText(text) {
 function rowsToScenario(rows) {
   const byId = new Map();
   const events = [];
+  const killEvents = [];   // 킬로그용: damaged_by + 상태 변화가 있을 때 emit
+  const lastStatusById = new Map();   // 상태 변화 감지용 (이전 상태)
   let duration = 0;
   let minX =  Infinity, maxX = -Infinity, minZ =  Infinity, maxZ = -Infinity;
 
@@ -96,6 +100,24 @@ function rowsToScenario(rows) {
     if (r.event === 'fire' && r.target) {
       events.push({ t: r.t, shooter: r.id, target: r.target });
     }
+
+    // 킬로그: damaged_by가 있고, 이전 상태와 달라졌을 때만 emit
+    // (같은 공격자가 같은 victim을 연속해서 칠 때도 매 상태 전이마다 한 번씩 기록)
+    if (r.damagedBy) {
+      const prev = lastStatusById.get(r.id);
+      if (prev !== r.status) {
+        killEvents.push({
+          t: r.t,
+          attacker: r.damagedBy,
+          victim: r.id,
+          victimTeam: r.team,
+          victimType: r.type,
+          newStatus: r.status,   // 'alive' / 'm_kill' / 'f_kill' / 'mf_kill' / 'k_kill'
+        });
+      }
+    }
+    lastStatusById.set(r.id, r.status);
+
     if (r.t > duration) duration = r.t;
     if (r.x < minX) minX = r.x; if (r.x > maxX) maxX = r.x;
     if (r.z < minZ) minZ = r.z; if (r.z > maxZ) maxZ = r.z;
@@ -105,12 +127,14 @@ function rowsToScenario(rows) {
   const agents = [...byId.values()];
   for (const a of agents) a.track.sort((p, q) => p.t - q.t);
   events.sort((a, b) => a.t - b.t);
+  killEvents.sort((a, b) => a.t - b.t);
 
   return {
     duration,
     bounds: { minX, maxX, minZ, maxZ },
     agents,
     events,
+    killEvents,
   };
 }
 

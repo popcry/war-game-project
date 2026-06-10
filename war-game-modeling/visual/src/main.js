@@ -21,8 +21,8 @@ import { unlockAudio, setMuted, isMuted } from './audio.js';
 const CSV_URL = '../results/simulation.csv';
 const MONEY_URL = '../results/money.csv';
 const CAMERAS_URL = '../results/cameras.json';
-const TERRAIN_TEXTURE_URL = '../outputs/vuhledar_terrain_overlay.png';
-const HEIGHT_GRID_URL = '../results/vuhledar_height_grid.png';
+const TERRAIN_TEXTURE_URL = '../results/vuhledar_5x_terrain_overlay.png';
+const HEIGHT_GRID_URL = '../results/vuhledar_5x_height_grid.png';
 
 // Trench mask: binary (0/1) CSV stretched over the same UV space as the
 // terrain grids — its native resolution does not need to match (bilinear
@@ -30,7 +30,7 @@ const HEIGHT_GRID_URL = '../results/vuhledar_height_grid.png';
 // at each sample, so fractional values at cell edges give naturally sloped
 // trench walls. sampleHeight() for unit placement is left untouched, so
 // units continue to stand on the un-trenched surface.
-const TRENCH_MASK_URL = '../results/vuhledar_trench_mask.csv';
+const TRENCH_MASK_URL = '../results/vuhledar_5x_trench_mask.csv';
 const TRENCH_DEPTH    = 2.5;    // world-m depression where mask = 1
 const TRENCH_FLIP_V   = false;  // true if CSV row 0 = south (default assumes north)
 
@@ -1035,6 +1035,75 @@ const effects = new EffectsManager({ scene, agentsById, sampleHeight, camera });
 effects.setEvents(scenario.events ?? []);
 effects.setAgents(agents);
 
+// ---------- Kill feed (PUBG 스타일 우측 상단 로그) ----------
+// scenario.killEvents = [{ t, attacker, victim, victimTeam, victimType, newStatus }]
+// 큐 모델: 최대 KILL_FEED_MAX개까지 쌓이고, 그 이상이면 가장 오래된(맨 위)게 밀려나며 위로 슬라이드.
+const killFeedEl = document.getElementById('killfeed');
+const KILL_FEED_MAX  = 5;
+const killEventsSorted = [...(scenario.killEvents ?? [])].sort((a, b) => a.t - b.t);
+let killFeedNextIdx = 0;
+const killFeedActive = [];   // { ev, el }
+
+function _verbForStatus(s) {
+  if (s === 'k_kill')  return 'KILLED';
+  if (s === 'mf_kill') return 'WRECKED';
+  if (s === 'f_kill')  return 'DISARMED';
+  if (s === 'm_kill')  return 'IMMOBILIZED';
+  return 'HIT';
+}
+
+function _formatKillTime(t) {
+  return `${t.toFixed(1)}s`;
+}
+
+function _entryHtml(ev) {
+  const atk = agentsById.get(ev.attacker);
+  const atkTeam = (atk?.team || '').toLowerCase();
+  const vicTeam = (ev.victimTeam || '').toLowerCase();
+  const atkLabel = formatAgentLabel(ev.attacker);
+  const vicLabel = formatAgentLabel(ev.victim);
+  const verb = _verbForStatus(ev.newStatus);
+  return `<span class="kf-time">${_formatKillTime(ev.t)}</span>` +
+         `<span class="kf-name ${atkTeam}">${atkLabel}</span>` +
+         `<span class="kf-arrow">▸</span>` +
+         `<span class="kf-verb">${verb}</span>` +
+         `<span class="kf-name ${vicTeam}">${vicLabel}</span>`;
+}
+
+function _addKillEntry(ev) {
+  const el = document.createElement('div');
+  el.className = `kill-entry ${ev.newStatus}`;
+  el.innerHTML = _entryHtml(ev);
+  killFeedEl.appendChild(el);    // 신규는 맨 아래 추가
+  killFeedActive.push({ ev, el });
+  // 큐 가득 차면 맨 위(가장 오래된)부터 밀어냄
+  while (killFeedActive.length > KILL_FEED_MAX) {
+    const old = killFeedActive.shift();
+    old.el.classList.add('fading');
+    setTimeout(() => old.el.remove(), 500);
+  }
+}
+
+function killFeedUpdate(t) {
+  while (killFeedNextIdx < killEventsSorted.length && killEventsSorted[killFeedNextIdx].t <= t) {
+    _addKillEntry(killEventsSorted[killFeedNextIdx++]);
+  }
+}
+
+function rewindKillFeed(t) {
+  // 다음 처리할 이벤트 인덱스 = t 이후 첫 이벤트
+  killFeedNextIdx = killEventsSorted.findIndex(e => e.t > t);
+  if (killFeedNextIdx === -1) killFeedNextIdx = killEventsSorted.length;
+  // 현재 표시 모두 제거
+  for (const a of killFeedActive) a.el.remove();
+  killFeedActive.length = 0;
+  // t 이전의 최근 KILL_FEED_MAX개를 시간순으로 다시 표시 (스크럽한 시점 직전 상황 복원)
+  const start = Math.max(0, killFeedNextIdx - KILL_FEED_MAX);
+  for (let i = start; i < killFeedNextIdx; i++) {
+    _addKillEntry(killEventsSorted[i]);
+  }
+}
+
 // ---------- Turret aiming ----------
 // Pre-index fire events by shooter so applyFrame can swing each turreted unit
 // to face its current/imminent target. AIM_LEAD seconds before fire, the
@@ -1082,7 +1151,7 @@ function formatAgentLabel(agentId) {
   const typeName = TYPE_LABELS[agent.spec.type] ?? agent.spec.type;
   const m = agentId.match(/_(\d+)$/);
   const idx = m ? ` ${m[1]}` : '';
-  return `${teamName} ${typeName}${idx} View`;
+  return `${teamName} ${typeName}${idx}`;
 }
 
 director.onShotChange = (shot) => {
@@ -1093,7 +1162,7 @@ director.onShotChange = (shot) => {
     $viewerLabel.textContent = '';
     return;
   }
-  $viewerLabel.textContent = formatAgentLabel(shot.agent);
+  $viewerLabel.textContent = `${formatAgentLabel(shot.agent)} View`;
   const agent = agentsById.get(shot.agent);
   if (agent) $viewerLabel.classList.add(agent.spec.team);
   $viewerLabel.classList.add('visible');
@@ -1317,7 +1386,7 @@ const TYPE_LABELS = {
   artillery:       'Artillery',
   antitank:        'Antitank',
   drone:           'Drone',
-  self_dest_drone: 'Kamikaze',
+  self_dest_drone: 'Suicide Drone',
   command_post:    'Command',
 };
 const TYPE_ORDER = ['infantry', 'tank', 'artillery', 'antitank', 'drone', 'self_dest_drone', 'command_post'];
@@ -1511,6 +1580,7 @@ $play.addEventListener('click', () => { unlockAudio(); setPlaying(!playing); });
 $restart.addEventListener('click', () => {
   unlockAudio();
   currentTime = 0;
+  rewindKillFeed(0);   // 킬로그 초기화
   detection?.clear();   // fresh replay starts with a blank recon map
   resetIntel();         // and no carried-over spotted-artillery arrows
   setPlaying(true);
@@ -1638,14 +1708,15 @@ $btnGraph?.addEventListener('click', () => openBattleGraph(buildGraphData()));
 $scrub.addEventListener('input', e => {
   scrubbing = true;
   currentTime = (parseFloat(e.target.value) / 1000) * scenario.duration;
+  rewindKillFeed(currentTime);
 });
 $scrub.addEventListener('change', () => { scrubbing = false; });
 
 window.addEventListener('keydown', e => {
   unlockAudio();
   if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
-  else if (e.code === 'ArrowLeft')  { currentTime = Math.max(0, currentTime - 2); }
-  else if (e.code === 'ArrowRight') { currentTime = Math.min(scenario.duration, currentTime + 2); }
+  else if (e.code === 'ArrowLeft')  { currentTime = Math.max(0, currentTime - 2); rewindKillFeed(currentTime); }
+  else if (e.code === 'ArrowRight') { currentTime = Math.min(scenario.duration, currentTime + 2); rewindKillFeed(currentTime); }
   else if (e.code === 'KeyC')       { director.setEnabled(!director.enabled); refreshCinemaButton(); }
   else if (e.code === 'KeyD')       { if (detection) detection.setEnabled(!detection.isEnabled()); refreshDetectButton(); }
 });
@@ -1865,6 +1936,7 @@ function tick() {
   detection?.flush();
   updateIntel();   // recon→command arrows (uses this frame's coverage + positions)
   updateCostPanel(currentTime);   // step-hold sample of money.csv keyed on scenario time
+  killFeedUpdate(currentTime);    // PUBG 스타일 킬로그 갱신
 
   // spin drone rotors
   for (const r of rotorMeshes) r.rotation.y += dt * 40;

@@ -26,6 +26,51 @@
     }
     #stats   { top:14px; right:14px; min-width:200px; font-variant-numeric: tabular-nums; }
     #help    { bottom:90px; right:14px; max-width:240px; font-size:12px; color:var(--muted); }
+
+    /* ---------- KillFeed (PUBG 스타일) ---------- */
+    /* stats 패널(right:14px, width~228px) 바로 왼쪽 + 같은 높이에서 시작.
+       신규 항목은 아래에 추가, 가장 위(=오래된)부터 페이드 아웃. */
+    #killfeed {
+      position: absolute; right: 260px; top: 14px;
+      display: flex; flex-direction: column; gap: 4px;
+      align-items: flex-end; pointer-events: none; z-index: 25;
+      font-variant-numeric: tabular-nums;
+    }
+    .kill-entry {
+      background: rgba(15, 22, 30, 0.82);
+      border: 1px solid #1f2a36; border-radius: 6px;
+      padding: 6px 10px; font-size: 12px; line-height: 1.4;
+      color: var(--text);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      opacity: 0; transform: translateX(20px);
+      animation: kill-in 0.25s ease-out forwards;
+      white-space: nowrap;
+      overflow: hidden;
+      max-height: 50px;   /* fade-out에서 0으로 축소 → 아래 항목이 자연스럽게 위로 올라옴 */
+    }
+    .kill-entry.fading { animation: kill-out 0.5s ease-in forwards; }
+    @keyframes kill-in  { to { opacity: 1; transform: translateX(0); } }
+    @keyframes kill-out {
+      to {
+        opacity: 0; transform: translateX(20px);
+        max-height: 0; padding-top: 0; padding-bottom: 0;
+        margin-top: 0; border-top-width: 0; border-bottom-width: 0;
+      }
+    }
+    .kill-entry .kf-time {
+      color: var(--muted); font-size: 11px;
+      margin-right: 8px; font-variant-numeric: tabular-nums;
+      min-width: 44px; display: inline-block; text-align: right;
+    }
+    .kill-entry .kf-name { font-weight: 600; }
+    .kill-entry .kf-name.blue { color: var(--blue); }
+    .kill-entry .kf-name.red  { color: var(--red); }
+    .kill-entry .kf-arrow { color: var(--muted); margin: 0 6px; }
+    .kill-entry .kf-verb  { color: var(--muted); margin-right: 4px; font-size: 11px; }
+    .kill-entry.k_kill .kf-verb { color: #ff8a65; }   /* 사망 */
+    .kill-entry.mf_kill .kf-verb,
+    .kill-entry.f_kill  .kf-verb,
+    .kill-entry.m_kill  .kf-verb { color: #ffd66e; }  /* 무력화 */
     #viewer-label {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       font-size: 32px; font-weight: 700; letter-spacing: 1.5px;
@@ -250,6 +295,8 @@
     <div id="stat-breakdown"></div>
     <div id="cost-section"></div>
   </div>
+
+  <div id="killfeed"></div>
 
   <div id="help" class="panel">
     <div><b>Mouse</b>: drag rotate · wheel zoom · right-drag pan</div>
