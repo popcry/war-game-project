@@ -65,6 +65,14 @@ const WATER_RIPPLE_AMP    = 0.06;     // world-m vertical ripple amplitude
 const WATER_RIPPLE_SPEED  = 1.2;      // ripple temporal frequency
 const WATER_RIPPLE_WAVES  = 0.6;      // ripple spatial frequency (per world-m)
 
+// Urban: where the overlay PNG is urban (the generator paints terrain_type
+// "urban" as CSS gray), scatter small building boxes that rise to roughly the
+// grass height, so a built-up cell reads as a low cluster of structures rather
+// than a flat gray patch. Same canvas-read + UV→world placement as the grass.
+const URBAN_BUILDING_COUNT  = 1200;               // box instances across all gray cells
+const URBAN_BUILDING_HEIGHT = GRASS_BLADE_HEIGHT; // ~grass height, per request (random ±30%)
+const URBAN_BUILDING_COLOR  = 0x9a9a9a;           // concrete gray; per-instance shade jittered
+
 // Ground plane covers the existing scenario world (±60 m). Both PNGs share the
 // same 613×636 pixel grid (one pixel = one 50 m AOI cell), and both have PNG
 // row 0 = north. We disable Three's default flipY so UV(0, 0) maps to the
@@ -206,6 +214,7 @@ async function start() {
 let sampleHeight = () => 0;
 let detection = null;
 let water = null;   // river surface mesh (animated); null when the overlay has no water cells
+let urban = null;   // urban building cluster; null when the overlay has no gray cells
 try {
   const [colorTex, heightGrid, trenchMask] = await Promise.all([
     loadTextureAsync(TERRAIN_TEXTURE_URL),
@@ -263,6 +272,10 @@ try {
   // River surface on water (blue) cells.
   water = buildWater(colorTex.image, sampleHeight);
   if (water) scene.add(water);
+
+  // Building cluster on urban (gray) cells.
+  urban = buildUrbanBuildings(colorTex.image, sampleHeight);
+  if (urban) scene.add(urban);
 } catch (err) {
   console.warn('terrain not loaded — falling back to flat ground:', err.message);
 }
@@ -617,6 +630,81 @@ function updateWater(time) {
   }
   pos.needsUpdate = true;
   water.geometry.computeVertexNormals();   // water cells are few — cheap to relight
+}
+
+function buildUrbanBuildings(colorImage, sampleHeightFn) {
+  // Same canvas-read pattern as the grass/debris/water builders, but the
+  // matched class is urban (CSS gray). Building boxes are scattered across the
+  // gray cells as a single InstancedMesh, rising to ~grass height with random
+  // footprint, yaw and per-instance shade so the cluster doesn't look uniform.
+  const w = colorImage.width;
+  const h = colorImage.height;
+  if (!w || !h) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(colorImage, 0, 0);
+  const px = ctx.getImageData(0, 0, w, h).data;
+
+  // Urban overlay color is CSS gray (~128,128,128) at 0.8 alpha — R≈G≈B in the
+  // mid range. Tan (R-dominant), forest green, water blue and railway purple
+  // all break the near-equal-channels test and stay building-free.
+  const grayCells = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+      if (a > 40 && r > 90 && r < 170 &&
+          Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25) {
+        grayCells.push(x, y);
+      }
+    }
+  }
+  if (grayCells.length === 0) return null;
+
+  // Unit box translated so its base sits at y=0; the per-instance Y scale then
+  // grows it upward from the ground and the instance position rides the terrain.
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+  boxGeo.translate(0, 0.5, 0);
+  const boxMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,   // base white — modulated by per-instance color
+    roughness: 0.9,
+    metalness: 0,
+  });
+
+  const mesh = new THREE.InstancedMesh(boxGeo, boxMat, URBAN_BUILDING_COUNT);
+  mesh.name = 'terrain.urban';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  const dummy = new THREE.Object3D();
+  const tmpColor = new THREE.Color();
+  const baseColor = new THREE.Color(URBAN_BUILDING_COLOR);
+  const cellCount = grayCells.length / 2;
+  for (let i = 0; i < URBAN_BUILDING_COUNT; i++) {
+    const c = Math.floor(Math.random() * cellCount) * 2;
+    const u = (grayCells[c] + Math.random()) / w;
+    const v = (grayCells[c + 1] + Math.random()) / h;
+    const wx = u * PLANE_SIZE - PLANE_SIZE / 2;
+    const wz = PLANE_SIZE / 2 - v * PLANE_SIZE;
+    const wy = sampleHeightFn(wx, wz);
+    const footW = 0.6 + Math.random() * 1.0;   // footprint width  (world-m)
+    const footD = 0.6 + Math.random() * 1.0;   // footprint depth
+    const height = URBAN_BUILDING_HEIGHT * (0.7 + Math.random() * 0.6);
+    dummy.position.set(wx, wy, wz);
+    dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    dummy.scale.set(footW, height, footD);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+    // Per-instance brightness so the block isn't a single flat gray.
+    const shade = 0.7 + Math.random() * 0.4;
+    tmpColor.copy(baseColor).multiplyScalar(shade);
+    mesh.setColorAt(i, tmpColor);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  return mesh;
 }
 
 // ---------- Scenario / Agents ----------
