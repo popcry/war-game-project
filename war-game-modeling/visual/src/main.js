@@ -66,12 +66,15 @@ const WATER_RIPPLE_SPEED  = 1.2;      // ripple temporal frequency
 const WATER_RIPPLE_WAVES  = 0.6;      // ripple spatial frequency (per world-m)
 
 // Urban: where the overlay PNG is urban (the generator paints terrain_type
-// "urban" as CSS gray), scatter small building boxes that rise to roughly the
-// grass height, so a built-up cell reads as a low cluster of structures rather
-// than a flat gray patch. Same canvas-read + UV→world placement as the grass.
-const URBAN_BUILDING_COUNT  = 1200;               // box instances across all gray cells
-const URBAN_BUILDING_HEIGHT = GRASS_BLADE_HEIGHT; // ~grass height, per request (random ±30%)
-const URBAN_BUILDING_COLOR  = 0x9a9a9a;           // concrete gray; per-instance shade jittered
+// "urban" as CSS gray), scatter small building boxes so a built-up cell reads as
+// a low cluster of structures rather than a flat gray patch. Same canvas-read +
+// UV→world placement as the grass. Tuned to a finer grain — many short, small-
+// footprint rubble/low-rise boxes — so the cluster looks granular up close.
+const URBAN_BUILDING_COUNT   = 3000;   // box instances across all gray cells (more, since each is smaller)
+const URBAN_BUILDING_HEIGHT  = 0.55;   // world-m base height — low (random ±30%), well under grass
+const URBAN_FOOTPRINT_MIN    = 0.22;   // smallest footprint edge (world-m)
+const URBAN_FOOTPRINT_JITTER = 0.45;   // added random footprint span — small grains
+const URBAN_BUILDING_COLOR   = 0x9a9a9a; // concrete gray; per-instance shade jittered
 
 // Ground plane covers the existing scenario world (±60 m). Both PNGs share the
 // same 613×636 pixel grid (one pixel = one 50 m AOI cell), and both have PNG
@@ -689,8 +692,8 @@ function buildUrbanBuildings(colorImage, sampleHeightFn) {
     const wx = u * PLANE_SIZE - PLANE_SIZE / 2;
     const wz = PLANE_SIZE / 2 - v * PLANE_SIZE;
     const wy = sampleHeightFn(wx, wz);
-    const footW = 0.6 + Math.random() * 1.0;   // footprint width  (world-m)
-    const footD = 0.6 + Math.random() * 1.0;   // footprint depth
+    const footW = URBAN_FOOTPRINT_MIN + Math.random() * URBAN_FOOTPRINT_JITTER;   // footprint width  (world-m)
+    const footD = URBAN_FOOTPRINT_MIN + Math.random() * URBAN_FOOTPRINT_JITTER;   // footprint depth
     const height = URBAN_BUILDING_HEIGHT * (0.7 + Math.random() * 0.6);
     dummy.position.set(wx, wy, wz);
     dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
