@@ -53,6 +53,18 @@ const OPEN_SAND_COUNT   = 2000;      // flat sand-patch instances
 const OPEN_PEBBLE_COUNT = 600;       // pebble/gravel instances
 const OPEN_SAND_COLOR   = 0xd9c08a;  // light tan; pebble color is jittered per-instance
 
+// Water: where the overlay PNG is water (the generator paints terrain_type
+// "water" as CSS blue), build a translucent river surface — one quad per water
+// cell draped on the terrain height — and ripple it gently in the animation
+// loop so it reads as moving water rather than a flat blue patch. The current
+// AOI has no water cells, so this is a no-op until a water-bearing overlay is
+// supplied; the legend already lists the class.
+const WATER_COLOR         = 0x2e6f9e; // translucent river blue
+const WATER_LEVEL_OFFSET  = 0.10;     // sit just above the bank so it drapes like water
+const WATER_RIPPLE_AMP    = 0.06;     // world-m vertical ripple amplitude
+const WATER_RIPPLE_SPEED  = 1.2;      // ripple temporal frequency
+const WATER_RIPPLE_WAVES  = 0.6;      // ripple spatial frequency (per world-m)
+
 // Ground plane covers the existing scenario world (±60 m). Both PNGs share the
 // same 613×636 pixel grid (one pixel = one 50 m AOI cell), and both have PNG
 // row 0 = north. We disable Three's default flipY so UV(0, 0) maps to the
@@ -193,6 +205,7 @@ async function start() {
 // horizontal compression before per-vertex bilinear sampling.
 let sampleHeight = () => 0;
 let detection = null;
+let water = null;   // river surface mesh (animated); null when the overlay has no water cells
 try {
   const [colorTex, heightGrid, trenchMask] = await Promise.all([
     loadTextureAsync(TERRAIN_TEXTURE_URL),
@@ -246,6 +259,10 @@ try {
   // Sand + pebbles on open_field (tan) cells.
   const debris = buildOpenFieldDebris(colorTex.image, sampleHeight);
   if (debris) scene.add(debris);
+
+  // River surface on water (blue) cells.
+  water = buildWater(colorTex.image, sampleHeight);
+  if (water) scene.add(water);
 } catch (err) {
   console.warn('terrain not loaded — falling back to flat ground:', err.message);
 }
@@ -517,6 +534,89 @@ function buildOpenFieldDebris(colorImage, sampleHeightFn) {
   group.add(pebble);
 
   return group;
+}
+
+function buildWater(colorImage, sampleHeightFn) {
+  // Same canvas-read pattern as the grass/debris builders, but the matched
+  // class is water (CSS blue). One quad is emitted per water cell, draped on
+  // the terrain height so the river follows the ground; the resting positions
+  // are kept on userData.base so the tick loop can ripple Y each frame.
+  const w = colorImage.width;
+  const h = colorImage.height;
+  if (!w || !h) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(colorImage, 0, 0);
+  const px = ctx.getImageData(0, 0, w, h).data;
+
+  // Water overlay color is CSS blue (~0,0,255) at 0.8 alpha — B clearly
+  // dominates R and G. Tan open-field, green forest, gray urban and purple
+  // railway all fail this and stay dry.
+  const cells = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+      if (a > 40 && b > 150 && b > r + 60 && b > g + 60) cells.push(x, y);
+    }
+  }
+  if (cells.length === 0) return null;
+
+  // Cell (cx, cy) covers one source pixel; its four corners map to world with
+  // the same UV→world convention as sampleHeight (UV(0,0) = NW corner). Two
+  // triangles per cell; adjacent cells share corner heights (sampleHeight is
+  // continuous), so the surface is seamless.
+  const positions = [];
+  const toWX = u => u * PLANE_SIZE - PLANE_SIZE / 2;
+  const toWZ = v => PLANE_SIZE / 2 - v * PLANE_SIZE;
+  const cornerY = (wx, wz) => sampleHeightFn(wx, wz) + WATER_LEVEL_OFFSET;
+  for (let c = 0; c < cells.length; c += 2) {
+    const cx = cells[c], cy = cells[c + 1];
+    const x0 = toWX(cx / w),       x1 = toWX((cx + 1) / w);
+    const z0 = toWZ(cy / h),       z1 = toWZ((cy + 1) / h);
+    const ay = cornerY(x0, z0), by = cornerY(x1, z0);
+    const dy = cornerY(x1, z1), ey = cornerY(x0, z1);
+    positions.push(
+      x0, ay, z0,  x1, by, z0,  x1, dy, z1,
+      x0, ay, z0,  x1, dy, z1,  x0, ey, z1,
+    );
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: WATER_COLOR,
+    roughness: 0.22,
+    metalness: 0.0,
+    transparent: true,
+    opacity: 0.82,
+    emissive: 0x0b2230,    // faint glow keeps it readable without an env map
+    emissiveIntensity: 0.35,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'terrain.water';
+  mesh.receiveShadow = true;
+  mesh.userData.base = Float32Array.from(positions);   // resting surface for the ripple
+  return mesh;
+}
+
+function updateWater(time) {
+  if (!water) return;
+  const pos = water.geometry.attributes.position;
+  const base = water.userData.base;
+  for (let i = 0; i < pos.count; i++) {
+    const x = base[i * 3], z = base[i * 3 + 2];
+    const y = base[i * 3 + 1]
+      + WATER_RIPPLE_AMP * Math.sin(WATER_RIPPLE_SPEED * time + (x + z) * WATER_RIPPLE_WAVES);
+    pos.setY(i, y);
+  }
+  pos.needsUpdate = true;
+  water.geometry.computeVertexNormals();   // water cells are few — cheap to relight
 }
 
 // ---------- Scenario / Agents ----------
@@ -1643,6 +1743,9 @@ function tick() {
 
   // spin drone rotors
   for (const r of rotorMeshes) r.rotation.y += dt * 40;
+
+  // ripple the river surface
+  updateWater(performance.now() * 0.001);
 
   // pulse objective ring
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.003);
