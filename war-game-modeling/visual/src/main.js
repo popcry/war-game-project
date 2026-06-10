@@ -1327,31 +1327,95 @@ $btnDetect.addEventListener('click', () => {
 });
 
 // ---------- Battle graph popup ----------
-// 전투량(생존 유닛 수, 하락) + 금액(money.csv 누적 소비 비용, 상승)의 전체 타임라인을
-// 별도 창에 라인차트로 띄운다. 1초 간격으로 샘플링한다.
+// 전투량(생존 유닛 수, 하락)은 유닛 타입별로 분할, 금액(money.csv 누적 소비 비용, 상승)은
+// 팀 합계로 표시. 전체 타임라인을 1초 간격으로 샘플링해 별도 창에 라인차트로 띄운다.
+const GRAPH_TYPE_COLORS = {
+  infantry:        '#7fd17f',
+  tank:            '#ff7b6b',
+  artillery:       '#ffd166',
+  antitank:        '#c98bff',
+  drone:           '#4ea0ff',
+  self_dest_drone: '#ff9f43',
+  command_post:    '#e6edf3',
+};
+const GRAPH_TEAM_LABEL = { red: 'RED', blue: 'BLUE' };
+const GRAPH_TEAM_COLOR = { red: '#ff5b5b', blue: '#4ea0ff' };
+
 function buildGraphData() {
   const step = 1.0;
   const times = [];
   for (let t = 0; t <= scenario.duration + 1e-6; t += step) times.push(+t.toFixed(3));
 
-  const series = { red: { units: [], cost: [] }, blue: { units: [], cost: [] } };
-  for (const t of times) {
-    // 전투량 — 파괴(k_kill)되지 않은 유닛 수 (작전/무력화 모두 "전장에 남음")
-    const cnt = { red: 0, blue: 0 };
-    for (const ag of agents) {
-      const s = sampleAt(ag.spec.track, t, 0);
-      if (s.status !== 'k_kill' && cnt[ag.spec.team] !== undefined) cnt[ag.spec.team] += 1;
-    }
-    series.red.units.push({ t, n: cnt.red });
-    series.blue.units.push({ t, n: cnt.blue });
+  // 팀×타입별 생존 수 시계열 + 팀별 누적 비용 시계열
+  const unitsByTeamType = { red: {}, blue: {} };
+  for (const team of TEAM_ORDER) for (const ty of TYPE_ORDER) unitsByTeamType[team][ty] = [];
+  const costSeries = { red: [], blue: [] };
 
-    // 금액 — money.csv 누적 비용 (step-hold 샘플)
+  for (const t of times) {
+    const cnt = { red: {}, blue: {} };
+    for (const team of TEAM_ORDER) for (const ty of TYPE_ORDER) cnt[team][ty] = 0;
+    for (const ag of agents) {
+      const s = sampleAt(ag.spec.track, t, 0);  // 파괴(k_kill) 제외 = 전장에 남은 유닛
+      if (s.status !== 'k_kill' && cnt[ag.spec.team] && (ag.spec.type in cnt[ag.spec.team])) {
+        cnt[ag.spec.team][ag.spec.type] += 1;
+      }
+    }
+    for (const team of TEAM_ORDER) for (const ty of TYPE_ORDER) {
+      unitsByTeamType[team][ty].push(cnt[team][ty]);
+    }
     for (const team of TEAM_ORDER) {
-      const m = sampleMoney(moneySeries[team], t, 0);
-      series[team].cost.push({ t, total: m.total });
+      const m = sampleMoney(moneySeries[team], t, 0);  // step-hold 누적 비용
+      costSeries[team].push({ t, v: m.total });
     }
   }
-  return { duration: scenario.duration, currentTime, series };
+
+  // 전투량 합계 차트 — RED vs BLUE 비교 (전 타입 합산)
+  const charts = [];
+  const totalSeries = {};
+  for (const team of TEAM_ORDER) {
+    totalSeries[team] = times.map((t, i) => {
+      let n = 0;
+      for (const ty of TYPE_ORDER) n += unitsByTeamType[team][ty][i];
+      return { t, v: n };
+    });
+  }
+  charts.push({
+    title: '전투량 추이 — RED vs BLUE (합계)',
+    yFormat: v => String(Math.round(v)),
+    series: TEAM_ORDER.map(team => ({
+      points: totalSeries[team],
+      color: GRAPH_TEAM_COLOR[team],
+      label: GRAPH_TEAM_LABEL[team],
+    })),
+  });
+
+  // 전투량 차트 — 팀별로 한 개씩, 유닛 타입별 라인 (해당 팀에 존재하는 타입만)
+  for (const team of TEAM_ORDER) {
+    const present = TYPE_ORDER.filter(ty => totals[team][ty] > 0);
+    if (present.length === 0) continue;
+    charts.push({
+      title: `전투량 추이 — ${GRAPH_TEAM_LABEL[team]} (유닛 타입별)`,
+      yFormat: v => String(Math.round(v)),
+      series: present.map(ty => ({
+        points: times.map((t, i) => ({ t, v: unitsByTeamType[team][ty][i] })),
+        color: GRAPH_TYPE_COLORS[ty] ?? '#9aa7b3',
+        label: TYPE_LABELS[ty] ?? ty,
+      })),
+    });
+  }
+
+  // 금액 차트 — 팀 합계 누적 비용
+  charts.push({
+    title: '금액 추이 (누적 소비 비용)',
+    yFormat: v => '$' + Math.round(v).toLocaleString('en-US'),
+    series: TEAM_ORDER.map(team => ({
+      points: costSeries[team],
+      color: GRAPH_TEAM_COLOR[team],
+      label: GRAPH_TEAM_LABEL[team],
+    })),
+  });
+
+  return { duration: scenario.duration, currentTime, charts };
 }
 
 const $btnGraph = document.getElementById('btn-graph');
