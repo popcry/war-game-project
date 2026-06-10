@@ -198,6 +198,10 @@ class Movement:
             speed = self.get_unit_speed(unit, unit.position)
             next_x = unit.position[0] + dx * speed
             next_y = unit.position[1] + dy * speed
+            # 통행 불가 셀(강·건물) 차단 — 지상 유닛만
+            if not self.terrain.is_passable((next_x, next_y), unit.unit_type):
+                unit.update_action(Action.STOP)
+                return None
             return Event(
                 event_type=EventType.MOVE,
                 time=current_time + 1.0,
@@ -264,13 +268,17 @@ class Movement:
 
         # 다음 위치 계산 (지형 영향 포함)
         speed = self.get_unit_speed(unit, unit.position)
-        next_x = unit.position[0] + dx * speed* 1 #time interval (simulation.py 에서 sim_speed와 같은 수치로 해야함함)
-        next_y = unit.position[1] + dy * speed* 1 #time interval (simulation.py 에서 sim_speed와 같은 수치로 해야함함)
+        next_x = unit.position[0] + dx * speed * 1
+        next_y = unit.position[1] + dy * speed * 1
 
-        # 이동 이벤트 생성
+        # 통행 불가 셀(강·건물) 차단 — 지상 유닛만
+        if not self.terrain.is_passable((next_x, next_y), unit.unit_type):
+            unit.update_action(Action.STOP)
+            return None
+
         return Event(
             event_type=EventType.MOVE,
-            time=current_time + 1.0, #time interval (simulation.py 에서 sim_speed와 같은 수치로 해야함함)
+            time=current_time + 1.0,
             source_id=unit.id,
             position=(next_x, next_y)
         )

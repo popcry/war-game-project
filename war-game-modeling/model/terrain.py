@@ -65,6 +65,8 @@ class Terrain:
         self.dem_data = self._read_csv_values(dem_file).astype(float)
         self.river_mask = None
         self.trench_mask = None
+        self.urban_mask = None
+        self.forest_mask = None
         self.road_type_data = None
         self.MOUNTAIN_THRESHOLD = 50 / PIXEL_TO_METER_SCALE
         self.RIVER_THRESHOLD = 39 / PIXEL_TO_METER_SCALE
@@ -78,11 +80,15 @@ class Terrain:
             str(value).lower()
             for value in self.terrain_config.get("trench_labels", [1, "1", "trench", "true", "t"])
         )
+        urban_file_cache = self.terrain_config.get("urban_mask_file")
+        forest_file_cache = self.terrain_config.get("forest_mask_file")
         cache_key = (
             elevation_file,
             river_file,
             road_file,
             trench_file,
+            urban_file_cache,
+            forest_file_cache,
             trench_labels,
             self.terrain_config.get("mountain_threshold_m"),
             self.terrain_config.get("mountain_elevation_quantile", 0.75),
@@ -93,6 +99,8 @@ class Terrain:
             self.dem_data = cached["dem_data"]
             self.river_mask = cached["river_mask"]
             self.trench_mask = cached["trench_mask"]
+            self.urban_mask = cached["urban_mask"]
+            self.forest_mask = cached["forest_mask"]
             self.road_type_data = cached["road_type_data"]
             self.MOUNTAIN_THRESHOLD = cached["mountain_threshold"]
             self.RIVER_THRESHOLD = None
@@ -120,6 +128,20 @@ class Terrain:
         else:
             self.trench_mask = np.zeros(shape, dtype=bool)
 
+        # urban mask (건물·시가지) — 지상 유닛 통행 불가 판정에 사용
+        urban_file = self.terrain_config.get("urban_mask_file")
+        if urban_file and os.path.exists(urban_file):
+            self.urban_mask = self._read_csv_values(urban_file).astype(float) > 0
+        else:
+            self.urban_mask = np.zeros(shape, dtype=bool)
+
+        # forest mask (산림) — 지상 유닛 감속에 사용
+        forest_file = self.terrain_config.get("forest_mask_file")
+        if forest_file and os.path.exists(forest_file):
+            self.forest_mask = self._read_csv_values(forest_file).astype(float) > 0
+        else:
+            self.forest_mask = np.zeros(shape, dtype=bool)
+
         threshold_m = self.terrain_config.get("mountain_threshold_m")
         if threshold_m is None:
             quantile = float(self.terrain_config.get("mountain_elevation_quantile", 0.75))
@@ -131,6 +153,8 @@ class Terrain:
             "dem_data": self.dem_data,
             "river_mask": self.river_mask,
             "trench_mask": self.trench_mask,
+            "urban_mask": self.urban_mask,
+            "forest_mask": self.forest_mask,
             "road_type_data": self.road_type_data,
             "mountain_threshold": self.MOUNTAIN_THRESHOLD,
         }
@@ -168,6 +192,33 @@ class Terrain:
         x_int, y_int = self._index_position(position)
         return self._in_bounds(x_int, y_int) and bool(self.trench_mask[y_int, x_int])
 
+    def is_urban(self, position: Tuple[float, float]) -> bool:
+        """건물·시가지 셀 여부 — 지상 유닛 통행 불가."""
+        x_int, y_int = self._index_position(position)
+        if not self._in_bounds(x_int, y_int) or self.urban_mask is None:
+            return False
+        return bool(self.urban_mask[y_int, x_int])
+
+    def is_forest(self, position: Tuple[float, float]) -> bool:
+        """산림 셀 여부 — 지상 유닛 감속(통과는 가능)."""
+        x_int, y_int = self._index_position(position)
+        if not self._in_bounds(x_int, y_int) or self.forest_mask is None:
+            return False
+        return bool(self.forest_mask[y_int, x_int])
+
+    def is_passable(self, position: Tuple[float, float], unit_type) -> bool:
+        """지상 유닛 통행 가능 여부. 강·건물은 막힘. 드론은 항상 True (비행)."""
+        # 드론과 자폭드론은 비행하므로 모두 통과
+        from model.unit import UnitType
+        if unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
+            return True
+        # 지상 유닛: 강·건물은 차단
+        if self.is_river(position):
+            return False
+        if self.is_urban(position):
+            return False
+        return True
+
     def get_road_type(self, position: Tuple[float, float]) -> str:
         x_int, y_int = self._index_position(position)
         if not self._in_bounds(x_int, y_int) or self.road_type_data is None:
@@ -176,13 +227,21 @@ class Terrain:
         return road_type if road_type else "none"
 
     def get_terrain_type(self, position: Tuple[int, int]) -> str:
-        """Return terrain by priority: river, trench, road, mountain, normal."""
+        """Return terrain by priority: river → urban → trench → road → forest → mountain → normal.
+
+        통행 불가(차단): river, urban
+        통행 가능(감속): trench, road(가속), forest, mountain
+        """
         if self.is_river(position):
             return "river"
+        if self.layered and self.is_urban(position):
+            return "urban"
         if self.layered and self.is_trench(position):
             return "trench"
         if self.layered and self.get_road_type(position) != "none":
             return "road"
+        if self.layered and self.is_forest(position):
+            return "forest"
 
         elevation = self.get_elevation(position)
         if elevation >= self.MOUNTAIN_THRESHOLD:

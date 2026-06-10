@@ -37,9 +37,14 @@ class Fire:
         self.terrain = Terrain()
         self.money_tracker = money_tracker
 
-    def record_damage_cost(self, unit: Unit, old_status: Status, new_status: Status) -> None:
-        if self.money_tracker and old_status != new_status:
-            self.money_tracker.record_damage(unit, old_status, new_status)
+    def record_damage_cost(self, unit: Unit, old_status: Status, new_status: Status,
+                           attacker: Optional[Unit] = None) -> None:
+        if old_status != new_status:
+            if self.money_tracker:
+                self.money_tracker.record_damage(unit, old_status, new_status)
+            # CSV에 어떤 객체가 상태를 변화시켰는지 기록 (매 tick _record_tick에서 사용 후 클리어)
+            if attacker is not None:
+                unit.damaged_by_id = attacker.id
 
     def record_fire_cost(self, attacker: Unit) -> None:
         if self.money_tracker:
@@ -182,7 +187,7 @@ class Fire:
                             cumulative += prob
                             if rand_val <= cumulative:
                                 unit.update_status(status)
-                                self.record_damage_cost(unit, old_status, status)
+                                self.record_damage_cost(unit, old_status, status, attacker)
                                 affected_units.append((unit, old_status, status))
                                 break
 
@@ -259,7 +264,7 @@ class Fire:
                 cumulative += prob
                 if rand_val <= cumulative:
                     unit.update_status(status)
-                    self.record_damage_cost(unit, old_status, status)
+                    self.record_damage_cost(unit, old_status, status, attacker)
                     break
 
     def apply_self_dest_drone_damage(
@@ -300,7 +305,7 @@ class Fire:
                     cumulative += prob
                     if rand_val <= cumulative:
                         unit.update_status(status)
-                        self.record_damage_cost(unit, old_status, status)
+                        self.record_damage_cost(unit, old_status, status, attacker)
                         break
 
     def update_eligible_targets(self, unit: Unit, all_units: List[Unit]) -> None:
@@ -503,7 +508,7 @@ class Fire:
                 cumulative += prob   # multivariante probability sampling method
                 if rand_val <= cumulative:
                     target.update_status(status)
-                    self.record_damage_cost(target, old_status, status)
+                    self.record_damage_cost(target, old_status, status, attacker)
                     break
 
         attacker.update_action(Action.STOP)  # 사격 완료 후 STOP으로 변경

@@ -44,7 +44,7 @@ simulation:
 scaling:
   range_extra_div_non_artillery: 1   # 포병 외 사거리도 명목 그대로 (5x 맵용; 종전 5는 원본 5m/px 호환용)
   speed_scale_divisor: 5             # km/h → px/s 변환 제수
-  speed_time_multiplier: 30          # km/h → px/s 변환 시간 계수
+  speed_time_multiplier: 5           # 30 → 5 (1 tick = 1초, 이동·사격 정렬)
 
 # --- 탐지 / LOS ---
 detection:
@@ -90,6 +90,9 @@ probabilities:
       - ["Red", "RIFLE", "RIFLE", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
       - ["Red", "RIFLE", "DRONE", "All", 500, "-", 0.10, 0.06, 0.00, 0.00, 0.95, null]
       - ["Red", "RIFLE", "SELF_DEST_DRONE", "All", 500, "-", 0.08, 0.04, 0.00, 0.00, 0.95, null]
+      - ["Red",  "RIFLE", "ANTI_TANK", "Stand",  500, "-", 0.55, 0.45, 0.00, 0.00, 0.40, null]
+      - ["Red",  "RIFLE", "ANTI_TANK", "Prone",  500, "-", 0.40, 0.32, 0.00, 0.00, 0.40, null]
+      - ["Red",  "RIFLE", "ANTI_TANK", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
       - ["Red", "ANTI_TANK", "TANK", "All", "200(Ph=0.5)", "-", 0.70, 0.00, 0.00, 0.00, 0.80, null]
       - ["Red", "SELF_DEST_DRONE", "TANK", "All", 40000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
       - ["Red", "SELF_DEST_DRONE", "RIFLE", "All", 40000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
@@ -109,6 +112,9 @@ probabilities:
       - ["Blue", "RIFLE", "RIFLE", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
       - ["Blue", "RIFLE", "DRONE", "All", 500, "-", 0.10, 0.06, 0.00, 0.00, 0.95, null]
       - ["Blue", "RIFLE", "SELF_DEST_DRONE", "All", 500, "-", 0.08, 0.04, 0.00, 0.00, 0.95, null]
+      - ["Blue", "RIFLE", "ANTI_TANK", "Stand",  500, "-", 0.55, 0.45, 0.00, 0.00, 0.40, null]
+      - ["Blue", "RIFLE", "ANTI_TANK", "Prone",  500, "-", 0.40, 0.32, 0.00, 0.00, 0.40, null]
+      - ["Blue", "RIFLE", "ANTI_TANK", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
       - ["Blue", "ANTI_TANK", "TANK", "All", 2500, 75, 0.98, 0.95, 0.94, 0.92, 0.90, null]
       - ["Blue", "SELF_DEST_DRONE", "TANK", "All", 5000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
       - ["Blue", "SELF_DEST_DRONE", "RIFLE", "All", 5000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
@@ -458,32 +464,42 @@ terrain:
   # 5x 확장 영역(1200×875, 25 m/px) — vuhledar_bbox_5x/terrain_grid_30m.csv 에서 변환·리샘플됨
   # (생성 스크립트: scripts/build_vuhledar_5x_layers.py + scripts/resize_layers_to_1200x875.py)
   elevation_file: "database/vuhledar_5x_elevation.csv"
-  river_mask_file: "database/vuhledar_5x_river_mask.disabled.csv"  # 임시 비활성: 강 위 유닛 갇힘 + LOS 차단 회피
+  river_mask_file: "database/vuhledar_5x_river_mask.csv"
   road_type_file:  "database/vuhledar_5x_road_type.csv"
   trench_mask_file: "database/vuhledar_5x_trench_mask.csv"
+  urban_mask_file: "database/vuhledar_5x_urban_mask.csv"     # 건물·시가지 — 지상 통행 불가
+  forest_mask_file: "database/vuhledar_5x_forest_mask.csv"   # 산림 — 지상 감속
   trench_labels: [1, "1", "trench", "true", "t"]
   mountain_elevation_quantile: 0.75
   mobility:
     normal: 1.0
     mountain: 0.8
-    river: 0.2
+    river: 0.0        # 차단 (is_passable이 차단; 곱연산 안전망)
     road: 1.15
     trench: 0.7
+    urban: 0.0        # 차단
+    forest: 0.5       # 산림 감속 — 보병 행군 절반 속도
   visibility:
     normal: 1.0
     mountain: 0.8
     river: 1.0
     road: 1.0
     trench: 0.5
+    urban: 0.7        # 건물 사이 시야 감소
+    forest: 0.5       # 수풀 은폐
   hit_probability:
     normal: 1.0
     mountain: 0.9
     river: 1.0
     road: 1.0
-    trench: 0.6
+    trench: 1.0      # 0.6 → 1.0 (Trench 행이 이미 강한 방호 — 이중 감산 제거)
+    urban: 0.9       # 건물 차폐로 약간 감소
+    forest: 0.9      # 수풀로 약간 감소
   damage_probability:
     normal: 1.0
     mountain: 0.9
     river: 1.0
     road: 1.0
-    trench: 0.6
+    trench: 1.0      # 0.6 → 1.0 (이중 감산 제거)
+    urban: 0.9
+    forest: 0.9

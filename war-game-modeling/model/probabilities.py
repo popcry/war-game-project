@@ -20,7 +20,7 @@ _RANGE_POINTS = [
 _TARGET_STATUS_BY_PROTECTION = {
     "ES": ["Prone", "Open", "All"],
     "EM": ["Stand", "Open", "All"],
-    "DS": ["Defilade", "All"],
+    "DS": ["Defilade", "Trench", "All"],   # "Trench" 추가 — 참호 정지 보병 무적 버그 수정
     "DM": ["Trench", "Defilade", "All"],
 }
 

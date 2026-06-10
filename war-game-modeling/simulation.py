@@ -254,6 +254,32 @@ class Simulation:
         create_units_for_team(Team.BLUE, UnitType.COMMAND_POST, self.config['initial_positions']['BLUE']['COMMAND_POST'], self.config['num_cp_blue'])
         create_units_for_team(Team.BLUE, UnitType.SELF_DEST_DRONE, self.config['initial_positions']['BLUE']['SELF_DEST_DRONE'], self.config['num_self_dest_drone_blue'])  # 자폭 드론
 
+        # 초기 yaw를 진격방향(Phase 1 maneuver_objective)으로 정렬
+        # — 진형 추종원이 시작 시 "빽도"하는 것 방지
+        self._init_unit_yaw()
+
+    def _init_unit_yaw(self):
+        """팀별 Phase 1 maneuver_objective를 향한 방향으로 모든 유닛 yaw 초기 설정.
+
+        리더 yaw가 0(동쪽 고정)이면 squad follower가 진형 오프셋대로 옆/뒤로 샜다가
+        다시 정렬되어 후퇴처럼 보이는 문제 해결.
+        """
+        import math
+        phases_cfg = self.config.get('phases', {})
+        for team in (Team.RED, Team.BLUE):
+            mo = (phases_cfg.get(team.value, {}).get('phase_1', {}) or {}).get('maneuver_objective')
+            target = mo[0] if mo else None
+            for u in self.units:
+                if u.team != team:
+                    continue
+                if target is not None:
+                    dx = target[0] - u.position[0]
+                    dy = target[1] - u.position[1]
+                else:
+                    dx, dy = 0.0, (-1.0 if team == Team.RED else 1.0)
+                if dx * dx + dy * dy > 1e-9:
+                    u.yaw = math.atan2(dy, dx)
+
     def _build_agent_id_map(self):
         """유닛 id → 'team_abbr_idx' 형태의 agent_id 매핑 생성"""
         counters: Dict[tuple, int] = {}
@@ -310,6 +336,11 @@ class Simulation:
                 tgt_id = fire_events[unit.id]
                 target_str = self.agent_id_map.get(tgt_id, "")
 
+            # 이번 tick에 상태를 변화시킨 객체의 agent_id (없으면 빈 문자열)
+            damaged_by_str = ""
+            if unit.damaged_by_id is not None:
+                damaged_by_str = self.agent_id_map.get(unit.damaged_by_id, "")
+
             self.csv_rows.append({
                 "timestamp": round(self.current_time, 3),
                 "team": unit.team.value.lower(),
@@ -324,6 +355,7 @@ class Simulation:
                 "alive": status_str,
                 "event": event_str,
                 "target": target_str,
+                "damaged_by": damaged_by_str,
             })
 
     def _check_termination(self) -> Optional[str]:
@@ -365,7 +397,7 @@ class Simulation:
 
         fieldnames = ["timestamp", "team", "agent_type", "agent_id",
                       "squad_id", "is_leader",
-                      "x", "y", "z", "yaw", "alive", "event", "target"]
+                      "x", "y", "z", "yaw", "alive", "event", "target", "damaged_by"]
         with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -470,6 +502,10 @@ class Simulation:
                     self.visualizer.show_pause_screen()
                     continue
 
+            # 이번 tick에 상태 변화시킨 공격자 정보 클리어 (이번 tick 이벤트가 새로 채움)
+            for u in self.units:
+                u.damaged_by_id = None
+
             # 현재 시간에 발생할 모든 이벤트 수집
             current_events = []
             while self.events and self.events[0].time <= self.current_time:
@@ -519,7 +555,7 @@ class Simulation:
                 
                 # (b) 이동 이벤트 예약 — objective(이동 목표)가 있을 때만 이동
                 move_event = None
-                if unit.unit_type == UnitType.TANK:  # Tank는 이동사격 가능
+                if unit.unit_type == UnitType.TANK:  # 전차는 이동사격: 목표 있으면 사격 중에도 계속 전진
                     if unit.objective:
                         move_event = self.movement.move(unit, command, self.current_time, self.units)
                 elif unit.action != Action.FIRE and unit.objective:
