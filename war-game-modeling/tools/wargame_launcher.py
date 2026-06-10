@@ -528,6 +528,7 @@ INDEX_HTML = r"""<!doctype html>
         <label class="toggle"><span>Show eligible target lines</span><input id="eligible" type="checkbox" checked></label>
         <label class="toggle"><span>Show fire lines</span><input id="fire" type="checkbox" checked></label>
         <label class="toggle"><span>Disable video</span><input id="noVideo" type="checkbox"></label>
+        <label class="toggle"><span>Headless mode</span><input id="headless" type="checkbox"></label>
         <label class="toggle"><span>Close when finished</span><input id="noHold" type="checkbox"></label>
       </div>
 
@@ -640,6 +641,7 @@ INDEX_HTML = r"""<!doctype html>
       eligible: document.getElementById("eligible"),
       fire: document.getElementById("fire"),
       noVideo: document.getElementById("noVideo"),
+      headless: document.getElementById("headless"),
       noHold: document.getElementById("noHold"),
       mapSelect: document.getElementById("mapSelect"),
       teamSelect: document.getElementById("teamSelect"),
@@ -696,6 +698,7 @@ INDEX_HTML = r"""<!doctype html>
         showEligibleTargets: ids.eligible.checked,
         showFire: ids.fire.checked,
         noVideo: ids.noVideo.checked,
+        headless: ids.headless.checked,
         noHold: ids.noHold.checked,
         useDeployment: ids.useDeployment.checked,
         deployment: ids.useDeployment.checked ? structuredClone(deployment) : null,
@@ -712,6 +715,7 @@ INDEX_HTML = r"""<!doctype html>
       if (p.maxTime !== null && p.maxTime !== "") parts.push("--max-time", String(p.maxTime));
       if (p.noHold) parts.push("--no-hold");
       if (p.noVideo) parts.push("--no-video");
+      if (p.headless) parts.push("--headless");
       return parts;
     }
 
@@ -730,6 +734,7 @@ INDEX_HTML = r"""<!doctype html>
         ids.eligible.checked = true;
         ids.fire.checked = true;
         ids.noVideo.checked = true;
+        ids.headless.checked = true;
         ids.noHold.checked = true;
       }
       if (name === "visual") {
@@ -740,6 +745,7 @@ INDEX_HTML = r"""<!doctype html>
         ids.eligible.checked = true;
         ids.fire.checked = true;
         ids.noVideo.checked = true;
+        ids.headless.checked = false;
         ids.noHold.checked = true;
       }
       if (name === "video") {
@@ -750,6 +756,7 @@ INDEX_HTML = r"""<!doctype html>
         ids.eligible.checked = false;
         ids.fire.checked = true;
         ids.noVideo.checked = false;
+        ids.headless.checked = false;
         ids.noHold.checked = true;
       }
       if (name === "cli") {
@@ -760,6 +767,7 @@ INDEX_HTML = r"""<!doctype html>
         ids.eligible.checked = true;
         ids.fire.checked = true;
         ids.noVideo.checked = false;
+        ids.headless.checked = false;
         ids.noHold.checked = false;
       }
       updatePreview();
@@ -1999,6 +2007,8 @@ def build_command(payload: Dict[str, Any]) -> List[str]:
         command.append("--no-hold")
     if payload.get("noVideo"):
         command.append("--no-video")
+    if payload.get("headless"):
+        command.append("--headless")
     return command
 
 

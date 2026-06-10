@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "initial_deployment_from_excel_20260610",
+  "name": "3_3_deployment_20260610_190620",
   "mapPath": "database/background_5x.png",
   "mapWidth": 1200,
   "mapHeight": 875,
@@ -9,8 +9,8 @@
       "id": "RU-TK-01",
       "team": "RED",
       "unitType": "TANK",
-      "x": 860,
-      "y": 645,
+      "x": 885,
+      "y": 571,
       "quantity": 1
     },
     {
@@ -18,583 +18,583 @@
       "team": "RED",
       "unitType": "TANK",
       "x": 870,
-      "y": 640,
+      "y": 580,
       "quantity": 1
     },
     {
       "id": "RU-TK-03",
       "team": "RED",
       "unitType": "TANK",
-      "x": 880,
-      "y": 635,
+      "x": 861,
+      "y": 563,
       "quantity": 1
     },
     {
       "id": "RU-TK-04",
       "team": "RED",
       "unitType": "TANK",
-      "x": 855,
-      "y": 660,
+      "x": 854,
+      "y": 589,
       "quantity": 1
     },
     {
       "id": "RU-TK-05",
       "team": "RED",
       "unitType": "TANK",
-      "x": 865,
-      "y": 655,
+      "x": 850,
+      "y": 571,
       "quantity": 1
     },
     {
       "id": "RU-TK-06",
       "team": "RED",
       "unitType": "TANK",
-      "x": 875,
-      "y": 650,
+      "x": 879,
+      "y": 554,
       "quantity": 1
     },
     {
       "id": "RU-TK-07",
       "team": "RED",
       "unitType": "TANK",
-      "x": 850,
-      "y": 675,
+      "x": 870,
+      "y": 606,
       "quantity": 1
     },
     {
       "id": "RU-TK-08",
       "team": "RED",
       "unitType": "TANK",
-      "x": 860,
-      "y": 670,
+      "x": 915,
+      "y": 576,
       "quantity": 1
     },
     {
       "id": "RU-TK-09",
       "team": "RED",
       "unitType": "TANK",
-      "x": 870,
-      "y": 665,
+      "x": 883,
+      "y": 595,
       "quantity": 1
     },
     {
       "id": "RU-TK-10",
       "team": "RED",
       "unitType": "TANK",
-      "x": 880,
-      "y": 660,
+      "x": 900,
+      "y": 589,
       "quantity": 1
     },
     {
       "id": "RU-TK-11",
       "team": "RED",
       "unitType": "TANK",
-      "x": 825,
-      "y": 590,
+      "x": 763,
+      "y": 452,
       "quantity": 1
     },
     {
       "id": "RU-TK-12",
       "team": "RED",
       "unitType": "TANK",
-      "x": 835,
-      "y": 585,
+      "x": 748,
+      "y": 458,
       "quantity": 1
     },
     {
       "id": "RU-TK-13",
       "team": "RED",
       "unitType": "TANK",
-      "x": 845,
-      "y": 580,
+      "x": 798,
+      "y": 440,
       "quantity": 1
     },
     {
       "id": "RU-TK-14",
       "team": "RED",
       "unitType": "TANK",
-      "x": 855,
-      "y": 575,
+      "x": 781,
+      "y": 446,
       "quantity": 1
     },
     {
       "id": "RU-TK-15",
       "team": "RED",
       "unitType": "TANK",
-      "x": 820,
-      "y": 605,
+      "x": 757,
+      "y": 473,
       "quantity": 1
     },
     {
       "id": "RU-TK-16",
       "team": "RED",
       "unitType": "TANK",
-      "x": 830,
-      "y": 600,
+      "x": 742,
+      "y": 480,
       "quantity": 1
     },
     {
       "id": "RU-TK-17",
       "team": "RED",
       "unitType": "TANK",
-      "x": 840,
-      "y": 595,
+      "x": 786,
+      "y": 461,
       "quantity": 1
     },
     {
       "id": "RU-TK-18",
       "team": "RED",
       "unitType": "TANK",
-      "x": 850,
-      "y": 590,
+      "x": 771,
+      "y": 467,
       "quantity": 1
     },
     {
       "id": "RU-TK-19",
       "team": "RED",
       "unitType": "TANK",
-      "x": 860,
-      "y": 585,
+      "x": 803,
+      "y": 458,
       "quantity": 1
     },
     {
       "id": "RU-TK-20",
       "team": "RED",
       "unitType": "TANK",
-      "x": 870,
-      "y": 580,
+      "x": 819,
+      "y": 452,
       "quantity": 1
     },
     {
       "id": "RU-TK-21",
       "team": "RED",
       "unitType": "TANK",
-      "x": 890,
-      "y": 710,
+      "x": 931,
+      "y": 664,
       "quantity": 1
     },
     {
       "id": "RU-TK-22",
       "team": "RED",
       "unitType": "TANK",
-      "x": 900,
-      "y": 705,
+      "x": 943,
+      "y": 656,
       "quantity": 1
     },
     {
       "id": "RU-TK-23",
       "team": "RED",
       "unitType": "TANK",
-      "x": 910,
-      "y": 700,
+      "x": 958,
+      "y": 647,
       "quantity": 1
     },
     {
       "id": "RU-TK-24",
       "team": "RED",
       "unitType": "TANK",
-      "x": 920,
-      "y": 695,
+      "x": 970,
+      "y": 638,
       "quantity": 1
     },
     {
       "id": "RU-TK-25",
       "team": "RED",
       "unitType": "TANK",
-      "x": 885,
-      "y": 730,
+      "x": 909,
+      "y": 731,
       "quantity": 1
     },
     {
       "id": "RU-TK-26",
       "team": "RED",
       "unitType": "TANK",
-      "x": 895,
-      "y": 725,
+      "x": 940,
+      "y": 711,
       "quantity": 1
     },
     {
       "id": "RU-TK-27",
       "team": "RED",
       "unitType": "TANK",
-      "x": 905,
-      "y": 720,
+      "x": 925,
+      "y": 722,
       "quantity": 1
     },
     {
       "id": "RU-TK-28",
       "team": "RED",
       "unitType": "TANK",
-      "x": 915,
-      "y": 715,
+      "x": 958,
+      "y": 699,
       "quantity": 1
     },
     {
       "id": "RU-TK-29",
       "team": "RED",
       "unitType": "TANK",
-      "x": 925,
-      "y": 710,
+      "x": 976,
+      "y": 690,
       "quantity": 1
     },
     {
       "id": "RU-TK-30",
       "team": "RED",
       "unitType": "TANK",
-      "x": 935,
-      "y": 705,
+      "x": 989,
+      "y": 679,
       "quantity": 1
     },
     {
       "id": "RU-INF-01",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 880,
-      "y": 685,
+      "x": 914,
+      "y": 624,
       "quantity": 9
     },
     {
       "id": "RU-INF-02",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 890,
-      "y": 680,
+      "x": 925,
+      "y": 614,
       "quantity": 9
     },
     {
       "id": "RU-INF-03",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 900,
-      "y": 675,
+      "x": 937,
+      "y": 603,
       "quantity": 9
     },
     {
       "id": "RU-INF-04",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 910,
-      "y": 670,
+      "x": 949,
+      "y": 592,
       "quantity": 9
     },
     {
       "id": "RU-INF-05",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 870,
-      "y": 615,
+      "x": 940,
+      "y": 524,
       "quantity": 9
     },
     {
       "id": "RU-INF-06",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 880,
-      "y": 610,
+      "x": 923,
+      "y": 531,
       "quantity": 9
     },
     {
       "id": "RU-INF-07",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 890,
-      "y": 605,
+      "x": 961,
+      "y": 513,
       "quantity": 9
     },
     {
       "id": "RU-INF-08",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 910,
-      "y": 750,
+      "x": 995,
+      "y": 760,
       "quantity": 9
     },
     {
       "id": "RU-INF-09",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 920,
-      "y": 745,
+      "x": 1008,
+      "y": 749,
       "quantity": 9
     },
     {
       "id": "RU-INF-10",
       "team": "RED",
       "unitType": "RIFLE",
-      "x": 930,
-      "y": 740,
+      "x": 1025,
+      "y": 742,
       "quantity": 9
     },
     {
       "id": "RU-AT-01",
       "team": "RED",
       "unitType": "ANTI_TANK",
-      "x": 895,
-      "y": 670,
+      "x": 952,
+      "y": 614,
       "quantity": 2
     },
     {
       "id": "RU-AT-02",
       "team": "RED",
       "unitType": "ANTI_TANK",
-      "x": 880,
-      "y": 605,
+      "x": 964,
+      "y": 534,
       "quantity": 2
     },
     {
       "id": "RU-AT-03",
       "team": "RED",
       "unitType": "ANTI_TANK",
-      "x": 915,
-      "y": 730,
+      "x": 1004,
+      "y": 728,
       "quantity": 2
     },
     {
       "id": "RU-AT-04",
       "team": "RED",
       "unitType": "ANTI_TANK",
-      "x": 905,
-      "y": 650,
+      "x": 979,
+      "y": 574,
       "quantity": 2
     },
     {
       "id": "RU-CP-01",
       "team": "RED",
       "unitType": "COMMAND_POST",
-      "x": 955,
-      "y": 630,
+      "x": 1110,
+      "y": 601,
       "quantity": 1
     },
     {
       "id": "UA-INF-01",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 340,
-      "y": 455,
+      "x": 397,
+      "y": 389,
       "quantity": 9
     },
     {
       "id": "UA-INF-02",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 360,
-      "y": 455,
+      "x": 415,
+      "y": 390,
       "quantity": 9
     },
     {
       "id": "UA-INF-03",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 450,
-      "y": 455,
+      "x": 514,
+      "y": 390,
       "quantity": 9
     },
     {
       "id": "UA-INF-04",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 515,
-      "y": 350,
+      "x": 590,
+      "y": 270,
       "quantity": 9
     },
     {
       "id": "UA-INF-05",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 535,
-      "y": 350,
+      "x": 614,
+      "y": 270,
       "quantity": 9
     },
     {
       "id": "UA-INF-06",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 570,
-      "y": 320,
+      "x": 640,
+      "y": 227,
       "quantity": 9
     },
     {
       "id": "UA-INF-07",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 350,
-      "y": 530,
+      "x": 399,
+      "y": 490,
       "quantity": 9
     },
     {
       "id": "UA-INF-08",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 370,
-      "y": 530,
+      "x": 417,
+      "y": 490,
       "quantity": 9
     },
     {
       "id": "UA-INF-09",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 430,
-      "y": 525,
+      "x": 494,
+      "y": 471,
       "quantity": 9
     },
     {
       "id": "UA-AT-01",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 430,
-      "y": 430,
+      "x": 493,
+      "y": 355,
       "quantity": 2
     },
     {
       "id": "UA-AT-02",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 455,
-      "y": 445,
+      "x": 522,
+      "y": 375,
       "quantity": 2
     },
     {
       "id": "UA-AT-03",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 500,
-      "y": 375,
+      "x": 566,
+      "y": 299,
       "quantity": 2
     },
     {
       "id": "UA-AT-04",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 540,
-      "y": 340,
+      "x": 609,
+      "y": 240,
       "quantity": 2
     },
     {
       "id": "UA-AT-05",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 585,
-      "y": 305,
+      "x": 678,
+      "y": 206,
       "quantity": 2
     },
     {
       "id": "UA-AT-06",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 400,
-      "y": 510,
+      "x": 449,
+      "y": 453,
       "quantity": 2
     },
     {
       "id": "UA-AT-07",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 445,
-      "y": 500,
+      "x": 520,
+      "y": 440,
       "quantity": 2
     },
     {
       "id": "UA-AT-08",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 370,
-      "y": 445,
+      "x": 429,
+      "y": 364,
       "quantity": 2
     },
     {
       "id": "UA-TK-01",
       "team": "BLUE",
       "unitType": "TANK",
-      "x": 300,
-      "y": 485,
+      "x": 349,
+      "y": 434,
       "quantity": 1
     },
     {
       "id": "UA-TK-02",
       "team": "BLUE",
       "unitType": "TANK",
-      "x": 330,
-      "y": 535,
+      "x": 374,
+      "y": 511,
       "quantity": 1
     },
     {
       "id": "UA-TK-03",
       "team": "BLUE",
       "unitType": "TANK",
-      "x": 290,
-      "y": 435,
+      "x": 336,
+      "y": 374,
       "quantity": 1
     },
     {
       "id": "UA-TK-04",
       "team": "BLUE",
       "unitType": "TANK",
-      "x": 410,
-      "y": 480,
+      "x": 464,
+      "y": 409,
       "quantity": 1
     },
     {
       "id": "UA-UAV-R-01",
       "team": "BLUE",
       "unitType": "DRONE",
-      "x": 405,
-      "y": 435,
+      "x": 632,
+      "y": 421,
       "quantity": 3
     },
     {
       "id": "UA-UAV-R-02",
       "team": "BLUE",
       "unitType": "DRONE",
-      "x": 545,
-      "y": 330,
+      "x": 804,
+      "y": 226,
       "quantity": 3
     },
     {
       "id": "UA-UAV-R-03",
       "team": "BLUE",
       "unitType": "DRONE",
-      "x": 380,
-      "y": 515,
+      "x": 709,
+      "y": 505,
       "quantity": 3
     },
     {
       "id": "UA-FPV-01",
       "team": "BLUE",
       "unitType": "SELF_DEST_DRONE",
-      "x": 390,
-      "y": 420,
+      "x": 601,
+      "y": 362,
       "quantity": 5
     },
     {
       "id": "UA-FPV-02",
       "team": "BLUE",
       "unitType": "SELF_DEST_DRONE",
-      "x": 430,
-      "y": 485,
+      "x": 792,
+      "y": 385,
       "quantity": 5
     },
     {
       "id": "UA-FPV-03",
       "team": "BLUE",
       "unitType": "SELF_DEST_DRONE",
-      "x": 520,
-      "y": 360,
+      "x": 701,
+      "y": 276,
       "quantity": 5
     },
     {
       "id": "UA-FPV-04",
       "team": "BLUE",
       "unitType": "SELF_DEST_DRONE",
-      "x": 360,
-      "y": 505,
+      "x": 577,
+      "y": 463,
       "quantity": 5
     },
     {
       "id": "UA-FPV-05",
       "team": "BLUE",
       "unitType": "SELF_DEST_DRONE",
-      "x": 340,
-      "y": 450,
+      "x": 549,
+      "y": 387,
       "quantity": 5
     },
     {
@@ -609,24 +609,24 @@
       "id": "UA-ART-02",
       "team": "BLUE",
       "unitType": "ARTILLERY",
-      "x": 45,
-      "y": 435,
+      "x": 35,
+      "y": 261,
       "quantity": 1
     },
     {
       "id": "UA-ART-03",
       "team": "BLUE",
       "unitType": "ARTILLERY",
-      "x": 40,
-      "y": 515,
+      "x": 30,
+      "y": 446,
       "quantity": 1
     },
     {
       "id": "UA-CP-01",
       "team": "BLUE",
       "unitType": "COMMAND_POST",
-      "x": 320,
-      "y": 405,
+      "x": 371,
+      "y": 339,
       "quantity": 1
     }
   ],
@@ -635,20 +635,20 @@
       "id": "TR-01",
       "points": [
         {
-          "x": 330,
-          "y": 465
+          "x": 382,
+          "y": 403
         },
         {
-          "x": 330,
-          "y": 445
+          "x": 382,
+          "y": 375
         },
         {
-          "x": 370,
-          "y": 445
+          "x": 429,
+          "y": 376
         },
         {
-          "x": 370,
-          "y": 465
+          "x": 427,
+          "y": 403
         }
       ]
     },
@@ -656,20 +656,20 @@
       "id": "TR-02",
       "points": [
         {
-          "x": 505,
-          "y": 360
+          "x": 627,
+          "y": 288
         },
         {
-          "x": 505,
-          "y": 340
+          "x": 626,
+          "y": 255
         },
         {
-          "x": 545,
-          "y": 340
+          "x": 576,
+          "y": 255
         },
         {
-          "x": 545,
-          "y": 360
+          "x": 577,
+          "y": 288
         }
       ]
     },
@@ -677,38 +677,22 @@
       "id": "TR-03",
       "points": [
         {
-          "x": 340,
-          "y": 540
+          "x": 382,
+          "y": 503
         },
         {
-          "x": 340,
-          "y": 520
+          "x": 383,
+          "y": 478
         },
         {
-          "x": 380,
-          "y": 520
+          "x": 431,
+          "y": 475
         },
         {
-          "x": 380,
-          "y": 540
+          "x": 428,
+          "y": 503
         }
       ]
     }
-  ],
-  "metadata": {
-    "sourceWorkbook": "C:\\Users\\user\\Downloads\\?? ? ?? ??.xlsx",
-    "sourceSheetIndex": 0,
-    "coordinateColumn": "????",
-    "createdAt": "2026-06-10T16:01:13",
-    "notes": "Converted from initial coordinates. TR-01 through TR-03 were added as 4-point trench rectangles from the provided coordinate table.",
-    "quantityMapping": {
-      "RIFLE": 9,
-      "ANTI_TANK": 2,
-      "DRONE": 3,
-      "SELF_DEST_DRONE": 5,
-      "TANK": 1,
-      "ARTILLERY": 1,
-      "COMMAND_POST": 1
-    }
-  }
+  ]
 }

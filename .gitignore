@@ -53,3 +53,5 @@ war-game-modeling/results/kaist_simulation_short.csv
 war-game-modeling/results/kaist_simulation_ver1.csv
 war-game-modeling/results/terrain.dem
 war-game-modeling/results/terrain.json
+
+war-game-modeling/runs/
