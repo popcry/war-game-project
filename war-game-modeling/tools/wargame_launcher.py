@@ -35,6 +35,10 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_DIR / "config.yaml"
 RUNS_DIR = PROJECT_DIR / "runs"
 DEPLOYMENTS_DIR = PROJECT_DIR / "deployments"
+VISUAL_DIR = PROJECT_DIR / "visual"
+RESULTS_DIR = PROJECT_DIR / "results"
+# Files the three.js replay needs before it can render anything meaningful.
+VISUAL_REQUIRED = ["simulation.csv"]
 LOG_TAIL_LIMIT = 1200
 UNIT_TYPES = ["RIFLE", "ANTI_TANK", "TANK", "ARTILLERY", "DRONE", "SELF_DEST_DRONE", "COMMAND_POST"]
 COUNT_KEYS = {
@@ -579,6 +583,7 @@ INDEX_HTML = r"""<!doctype html>
       <div class="actions">
         <button id="runBtn" class="btn primary">Run simulation</button>
         <button id="stopBtn" class="btn danger" disabled>Stop</button>
+        <button id="visualizeBtn" class="btn">View 3D replay</button>
       </div>
     </section>
 
@@ -1415,6 +1420,23 @@ INDEX_HTML = r"""<!doctype html>
       }
     }
 
+    async function visualize() {
+      try {
+        const info = await api("/api/visualize");
+        if (!info.ready) {
+          const missing = (info.missing || []).join(", ") || "simulation output";
+          const proceed = confirm(
+            "No simulation results found yet (" + missing + ").\n" +
+            "Run a simulation first, or open the replay anyway?"
+          );
+          if (!proceed) return;
+        }
+        window.open(info.url, "_blank", "noopener");
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
     function renderOutputs(items) {
       outputs.innerHTML = "";
       if (!items || items.length === 0) {
@@ -1582,6 +1604,7 @@ INDEX_HTML = r"""<!doctype html>
     });
     runBtn.addEventListener("click", run);
     stopBtn.addEventListener("click", stop);
+    document.getElementById("visualizeBtn").addEventListener("click", visualize);
     document.getElementById("addSelectedBtn").addEventListener("click", () => addPlacement());
     document.getElementById("drawTrenchBtn").addEventListener("click", startTrenchDrawing);
     document.getElementById("cancelTrenchBtn").addEventListener("click", cancelTrenchDrawing);
@@ -2285,6 +2308,18 @@ class LauncherHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/status":
             self.handle_status(parsed.query)
             return
+        if parsed.path == "/api/visualize":
+            self.handle_visualize_status()
+            return
+        if parsed.path == "/visual" or parsed.path == "/visual/":
+            self.handle_visual_file("/visual/index.html")
+            return
+        if parsed.path.startswith("/visual/"):
+            self.handle_visual_file(parsed.path)
+            return
+        if parsed.path.startswith("/results/"):
+            self.handle_results_file(parsed.path)
+            return
         if parsed.path.startswith("/assets/"):
             self.handle_asset_file(parsed.path)
             return
@@ -2478,6 +2513,31 @@ class LauncherHandler(BaseHTTPRequestHandler):
     def handle_run_file(self, path: str) -> None:
         safe_suffix = unquote(path[len("/runs/") :]).replace("\\", "/")
         self.send_file(RUNS_DIR / safe_suffix, RUNS_DIR)
+
+    def handle_visual_file(self, path: str) -> None:
+        safe_suffix = unquote(path[len("/visual/") :]).replace("\\", "/")
+        self.send_file(VISUAL_DIR / safe_suffix, VISUAL_DIR)
+
+    def handle_results_file(self, path: str) -> None:
+        safe_suffix = unquote(path[len("/results/") :]).replace("\\", "/")
+        self.send_file(RESULTS_DIR / safe_suffix, RESULTS_DIR)
+
+    def handle_visualize_status(self) -> None:
+        """Report whether the three.js replay can be opened yet.
+
+        The replay (visual/index.html) fetches ../results/simulation.csv from
+        the document base, so it only renders something useful after a run has
+        populated results/. We surface that readiness to the UI so the button
+        can warn instead of opening an empty scene.
+        """
+        missing = [name for name in VISUAL_REQUIRED if not (RESULTS_DIR / name).exists()]
+        self.send_json(
+            {
+                "url": "/visual/index.html",
+                "ready": not missing,
+                "missing": missing,
+            }
+        )
 
 
 def main() -> int:
