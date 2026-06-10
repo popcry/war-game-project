@@ -13,6 +13,8 @@ with open('config.yaml', 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
+MAP_WIDTH = config['simulation']['map_width_px']
+MAP_HEIGHT = config['simulation']['map_height_px']
 _MOV_CFG = config['movement']
 _DRONE_CFG = config['drone']
 _UNITS_CFG = config['units']
@@ -53,6 +55,40 @@ class Movement:
         self.detect = Detect()
         self.drone_positions = {}  # 드론의 현재 탐지 패턴 위치 저장
         self.drone_last_objective_change = {}  # 드론의 마지막 목표 지점 변경 시간 저장
+        self.drone_orbit_targets = {}  # 드론별 마지막 선회 표적 위치 저장
+
+    def _initial_drone_pattern(self, unit: Unit) -> int:
+        if not self.DRONE_PATTERN:
+            return 0
+        return unit.id % len(self.DRONE_PATTERN)
+
+    def calculate_drone_orbit_objective(self, unit: Unit, current_time: float,
+                                        all_units: List[Unit]) -> Optional[Tuple[float, float]]:
+        candidates = []
+        for target_id in unit.target_list:
+            target = next((u for u in all_units if u.id == target_id), None)
+            if target:
+                candidates.append(target)
+
+        if candidates:
+            target = min(candidates, key=lambda t: calculate_point_distance(unit.position, t.position))
+            orbit_center = target.position
+            self.drone_orbit_targets[unit.id] = orbit_center
+        else:
+            orbit_center = self.drone_orbit_targets.get(unit.id)
+            if orbit_center is None:
+                return None
+
+        orbit_radius = self.DRONE_GRID_SIZE
+        orbit_period = max(1.0, self.DRONE_OBJECTIVE_CHANGE_TIME)
+        phase = (unit.id % 8) / 8.0
+        angle = 2 * math.pi * ((current_time / orbit_period) + phase)
+        x = orbit_center[0] + math.cos(angle) * orbit_radius
+        y = orbit_center[1] + math.sin(angle) * orbit_radius
+        return (
+            max(0.0, min(float(MAP_WIDTH), x)),
+            max(0.0, min(float(MAP_HEIGHT), y)),
+        )
 
     def get_unit_speed(self, unit: Unit, position: Tuple[float, float]) -> float:
         """유닛의 이동 속도 반환 (지형 영향 포함)"""
@@ -84,7 +120,7 @@ class Movement:
         # 30초가 지났거나 처음 실행되는 경우에만 목표 지점 변경
         if current_time - last_change >= self.DRONE_OBJECTIVE_CHANGE_TIME:
             # 현재 드론의 패턴 위치 가져오기
-            current_pattern = self.drone_positions.get(unit.id, 0)
+            current_pattern = self.drone_positions.get(unit.id, self._initial_drone_pattern(unit))
             
             # 다음 패턴 위치 계산
             next_pattern = (current_pattern + 1) % len(self.DRONE_PATTERN)
@@ -94,7 +130,7 @@ class Movement:
             self.drone_last_objective_change[unit.id] = current_time
         else:
             # 현재 패턴 위치 유지
-            current_pattern = self.drone_positions.get(unit.id, 0)
+            current_pattern = self.drone_positions.get(unit.id, self._initial_drone_pattern(unit))
         
         # 패턴의 그리드 위치
         grid_x, grid_y = self.DRONE_PATTERN[current_pattern]
@@ -133,6 +169,10 @@ class Movement:
             return self.calculate_drone_objective(unit, command, current_time)
 
         if unit.unit_type == UnitType.DRONE:
+            if all_units is not None:
+                orbit_objective = self.calculate_drone_orbit_objective(unit, current_time, all_units)
+                if orbit_objective is not None:
+                    return orbit_objective
             return self.calculate_drone_objective(unit, command, current_time)
         elif unit.unit_type in [UnitType.RIFLE, UnitType.TANK, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
             if command.maneuver_objective and len(command.maneuver_objective) > 0:
@@ -171,7 +211,8 @@ class Movement:
         dy_px = world_dy_m / PIXEL_TO_METER_SCALE
         return (leader.position[0] + dx_px, leader.position[1] + dy_px)
 
-    def move(self, unit: Unit, command: Command, current_time: float, all_units: List[Unit]) -> Optional[Event]:
+    def move(self, unit: Unit, command: Command, current_time: float, all_units: List[Unit],
+             time_step: float = 1.0) -> Optional[Event]:
         """유닛 이동 실행
         - 분대 추종원: 리더 위치 + 회전된 진형 오프셋을 목표로 직선 이동
         - 리더 / squad 없음: 기존 로직 (TAI 또는 maneuver_objective)
@@ -196,15 +237,15 @@ class Movement:
                 dx /= distance
                 dy /= distance
             speed = self.get_unit_speed(unit, unit.position)
-            next_x = unit.position[0] + dx * speed
-            next_y = unit.position[1] + dy * speed
+            next_x = unit.position[0] + dx * speed * time_step
+            next_y = unit.position[1] + dy * speed * time_step
             # 통행 불가 셀(강·건물) 차단 — 지상 유닛만
             if not self.terrain.is_passable((next_x, next_y), unit.unit_type):
                 unit.update_action(Action.STOP)
                 return None
             return Event(
                 event_type=EventType.MOVE,
-                time=current_time + 1.0,
+                time=current_time + time_step,
                 source_id=unit.id,
                 position=(next_x, next_y),
             )
@@ -230,7 +271,7 @@ class Movement:
         if distance < self.MIN_DISTANCE_TO_OBJECTIVE:
             if unit.unit_type in [UnitType.DRONE, UnitType.SELF_DEST_DRONE]:
                 # 드론의 경우 다음 패턴으로 즉시 이동
-                current_pattern = self.drone_positions.get(unit.id, 0)
+                current_pattern = self.drone_positions.get(unit.id, self._initial_drone_pattern(unit))
                 next_pattern = (current_pattern + 1) % len(self.DRONE_PATTERN)
                 self.drone_positions[unit.id] = next_pattern
                 self.drone_last_objective_change[unit.id] = current_time
@@ -247,11 +288,11 @@ class Movement:
                         dx /= distance
                         dy /= distance
                     speed = self.get_unit_speed(unit, unit.position)
-                    next_x = unit.position[0] + dx * speed * 1 #time interval (simulation.py 에서 sim_speed와 같은 수치로 해야함함)
-                    next_y = unit.position[1] + dy * speed * 1 #time interval (simulation.py 에서 sim_speed와 같은 수치로 해야함함)
+                    next_x = unit.position[0] + dx * speed * time_step
+                    next_y = unit.position[1] + dy * speed * time_step
                     return Event(
                         event_type=EventType.MOVE,
-                        time=current_time + 1.0, #time interval
+                        time=current_time + time_step,
                         source_id=unit.id,
                         position=(next_x, next_y)
                     )
@@ -268,8 +309,8 @@ class Movement:
 
         # 다음 위치 계산 (지형 영향 포함)
         speed = self.get_unit_speed(unit, unit.position)
-        next_x = unit.position[0] + dx * speed * 1
-        next_y = unit.position[1] + dy * speed * 1
+        next_x = unit.position[0] + dx * speed * time_step
+        next_y = unit.position[1] + dy * speed * time_step
 
         # 통행 불가 셀(강·건물) 차단 — 지상 유닛만
         if not self.terrain.is_passable((next_x, next_y), unit.unit_type):
@@ -278,7 +319,7 @@ class Movement:
 
         return Event(
             event_type=EventType.MOVE,
-            time=current_time + 1.0,
+            time=current_time + time_step,
             source_id=unit.id,
             position=(next_x, next_y)
         )

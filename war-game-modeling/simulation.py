@@ -436,7 +436,7 @@ class Simulation:
             if unit.can_move():
                 # 드론·자폭드론은 TAI로 이동, 그 외엔 maneuver_objective가 있을 때만 이동
                 if unit.unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE) or command.maneuver_objective is not None:
-                    event = self.movement.move(unit, command, self.current_time, self.units)
+                    event = self.movement.move(unit, command, self.current_time, self.units, self.sim_speed)
                     if event:
                         heapq.heappush(self.events, event)
             # 사격 이벤트 스케줄링
@@ -571,9 +571,9 @@ class Simulation:
                 move_event = None
                 if unit.unit_type == UnitType.TANK:  # 전차는 이동사격: 목표 있으면 사격 중에도 계속 전진
                     if unit.objective:
-                        move_event = self.movement.move(unit, command, self.current_time, self.units)
+                        move_event = self.movement.move(unit, command, self.current_time, self.units, self.sim_speed)
                 elif unit.action != Action.FIRE and unit.objective:
-                    move_event = self.movement.move(unit, command, self.current_time, self.units)
+                    move_event = self.movement.move(unit, command, self.current_time, self.units, self.sim_speed)
                 if move_event:
                     heapq.heappush(self.events, move_event)
 
