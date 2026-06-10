@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "name": "trench_ui_test_delete_me",
+  "mapPath": "database/background_5x.png",
+  "mapWidth": 1200,
+  "mapHeight": 875,
+  "placements": [],
+  "trenches": [
+    {
+      "id": "trench_1781075781786",
+      "points": [
+        {
+          "x": 69,
+          "y": 79
+        },
+        {
+          "x": 221,
+          "y": 100
+        },
+        {
+          "x": 221,
+          "y": 171
+        },
+        {
+          "x": 99,
+          "y": 171
+        }
+      ]
+    }
+  ]
+}
