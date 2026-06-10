@@ -3,17 +3,18 @@
 // openBattleGraph(data)
 //   data = {
 //     duration: number,
-//     currentTime: number,                // 클릭 시점 — 세로 마커로 표시
-//     series: {
-//       red:  { units: [{t, n}], cost: [{t, total}] },
-//       blue: { units: [{t, n}], cost: [{t, total}] },
-//     }
+//     currentTime: number,          // 클릭 시점 — 세로 마커로 표시
+//     charts: [                      // 위에서부터 세로로 쌓아 그림
+//       {
+//         title: string,
+//         yLabel: string,            // (현재 축 옆 라벨은 생략, 제목으로 대체)
+//         yFormat: (v) => string,    // y축 눈금 포맷
+//         series: [ { points: [{t, v}], color, label } ],
+//       }, ...
+//     ]
 //   }
-// units(전투량)는 시간이 갈수록 감소(하락), cost(금액)는 누적 소비 비용이라 상승.
 // 외부 라이브러리 없이 팝업 문서에 자체 완결된 캔버스를 그린다.
 
-const RED = '#ff5b5b';
-const BLUE = '#4ea0ff';
 const BG = '#0b1116';
 const PANEL = '#11181f';
 const TEXT = '#e6edf3';
@@ -21,7 +22,7 @@ const MUTED = '#8b9aa8';
 const GRID = 'rgba(255,255,255,0.08)';
 
 export function openBattleGraph(data) {
-  const win = window.open('', 'battleGraph', 'width=920,height=760');
+  const win = window.open('', 'battleGraph', 'width=960,height=860');
   if (!win) {
     alert('팝업이 차단되었습니다. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.');
     return;
@@ -33,8 +34,7 @@ export function openBattleGraph(data) {
   const canvas = doc.getElementById('g');
 
   const redraw = () => drawAll(win, canvas, data);
-  // 레이아웃이 잡힌 다음 그리기
-  win.requestAnimationFrame(redraw);
+  win.requestAnimationFrame(redraw);  // 레이아웃이 잡힌 뒤 그리기
   win.addEventListener('resize', redraw);
 }
 
@@ -49,42 +49,29 @@ function drawAll(win, canvas, data) {
 
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssW, cssH);
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, cssW, cssH);
 
+  const charts = data.charts || [];
+  const n = charts.length;
+  if (n === 0) return;
+
   const pad = 16;
-  const gap = 18;
-  const panelH = (cssH - pad * 2 - gap) / 2;
+  const gap = 16;
+  const panelH = (cssH - pad * 2 - gap * (n - 1)) / n;
   const panelW = cssW - pad * 2;
 
-  drawChart(ctx, { x: pad, y: pad, w: panelW, h: panelH }, {
-    title: '전투량 추이 (생존 유닛 수)',
-    yLabel: '유닛 수',
-    duration: data.duration,
-    currentTime: data.currentTime,
-    series: [
-      { points: data.series.red.units, key: 'n', color: RED, label: 'RED' },
-      { points: data.series.blue.units, key: 'n', color: BLUE, label: 'BLUE' },
-    ],
-    yFormat: v => String(Math.round(v)),
-  });
-
-  drawChart(ctx, { x: pad, y: pad + panelH + gap, w: panelW, h: panelH }, {
-    title: '금액 추이 (누적 소비 비용)',
-    yLabel: '비용 ($)',
-    duration: data.duration,
-    currentTime: data.currentTime,
-    series: [
-      { points: data.series.red.cost, key: 'total', color: RED, label: 'RED' },
-      { points: data.series.blue.cost, key: 'total', color: BLUE, label: 'BLUE' },
-    ],
-    yFormat: v => '$' + Math.round(v).toLocaleString('en-US'),
-  });
+  for (let i = 0; i < n; i++) {
+    drawChart(ctx, { x: pad, y: pad + i * (panelH + gap), w: panelW, h: panelH }, {
+      ...charts[i],
+      duration: data.duration,
+      currentTime: data.currentTime,
+    });
+  }
 }
 
 function drawChart(ctx, area, opt) {
-  const mL = 70, mR = 16, mT = 30, mB = 34;
+  const mL = 72, mR = 16, mT = 30, mB = 30;
   const plot = {
     x: area.x + mL,
     y: area.y + mT,
@@ -103,12 +90,13 @@ function drawChart(ctx, area, opt) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(opt.title, area.x + 12, area.y + 20);
+  const titleW = ctx.measureText(opt.title).width;
 
   // 스케일 계산
   const xMax = Math.max(opt.duration, 1e-6);
   let yMax = 0;
   for (const s of opt.series) {
-    for (const p of s.points) yMax = Math.max(yMax, p[s.key] ?? 0);
+    for (const p of s.points) yMax = Math.max(yMax, p.v ?? 0);
   }
   if (yMax <= 0) yMax = 1;
   yMax = niceCeil(yMax);
@@ -118,10 +106,10 @@ function drawChart(ctx, area, opt) {
 
   // 그리드 + y축 눈금 (5분할)
   ctx.font = '11px -apple-system, "Segoe UI", "Noto Sans KR", sans-serif';
-  ctx.fillStyle = MUTED;
   ctx.strokeStyle = GRID;
   ctx.lineWidth = 1;
   const yTicks = 5;
+  ctx.fillStyle = MUTED;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   for (let i = 0; i <= yTicks; i++) {
@@ -140,8 +128,7 @@ function drawChart(ctx, area, opt) {
   ctx.textBaseline = 'top';
   for (let i = 0; i <= xTicks; i++) {
     const t = (xMax / xTicks) * i;
-    const px = xToPx(t);
-    ctx.fillText(t.toFixed(0) + 's', px, plot.y + plot.h + 6);
+    ctx.fillText(t.toFixed(0) + 's', xToPx(t), plot.y + plot.h + 6);
   }
 
   // 현재 시점 마커
@@ -165,25 +152,33 @@ function drawChart(ctx, area, opt) {
     let started = false;
     for (const p of s.points) {
       const px = xToPx(p.t);
-      const py = yToPx(p[s.key] ?? 0);
+      const py = yToPx(p.v ?? 0);
       if (!started) { ctx.moveTo(px, py); started = true; }
       else ctx.lineTo(px, py);
     }
     ctx.stroke();
   }
 
-  // 범례
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
+  // 범례 — 제목 우측, 측정 너비로 우측 정렬 한 줄 배치
   ctx.font = '12px -apple-system, "Segoe UI", "Noto Sans KR", sans-serif';
-  let lx = plot.x + plot.w - 120;
-  const ly = area.y + 20;
-  for (const s of opt.series) {
-    ctx.fillStyle = s.color;
-    ctx.fillRect(lx, ly - 5, 18, 3);
+  ctx.textBaseline = 'middle';
+  const SW = 16, GAPSW = 6, GAPITEM = 14;
+  const items = opt.series.map(s => ({ s, w: SW + GAPSW + ctx.measureText(s.label).width + GAPITEM }));
+  const totalW = items.reduce((a, b) => a + b.w, 0);
+  const minX = area.x + 12 + titleW + 16;
+  let lx = Math.max(minX, area.x + area.w - 12 - totalW);
+  const ly = area.y + 14;
+  ctx.textAlign = 'left';
+  for (const it of items) {
+    ctx.strokeStyle = it.s.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(lx + SW, ly);
+    ctx.stroke();
     ctx.fillStyle = TEXT;
-    ctx.fillText(s.label, lx + 24, ly);
-    lx += 60;
+    ctx.fillText(it.s.label, lx + SW + GAPSW, ly);
+    lx += it.w;
   }
 }
 

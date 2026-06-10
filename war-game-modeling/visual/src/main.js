@@ -53,6 +53,26 @@ const OPEN_SAND_COUNT   = 2000;      // flat sand-patch instances
 const OPEN_PEBBLE_COUNT = 600;       // pebble/gravel instances
 const OPEN_SAND_COLOR   = 0xd9c08a;  // light tan; pebble color is jittered per-instance
 
+// Water: where the overlay PNG is water (the generator paints terrain_type
+// "water" as CSS blue), build a translucent river surface — one quad per water
+// cell draped on the terrain height — and ripple it gently in the animation
+// loop so it reads as moving water rather than a flat blue patch. The current
+// AOI has no water cells, so this is a no-op until a water-bearing overlay is
+// supplied; the legend already lists the class.
+const WATER_COLOR         = 0x2e6f9e; // translucent river blue
+const WATER_LEVEL_OFFSET  = 0.10;     // sit just above the bank so it drapes like water
+const WATER_RIPPLE_AMP    = 0.06;     // world-m vertical ripple amplitude
+const WATER_RIPPLE_SPEED  = 1.2;      // ripple temporal frequency
+const WATER_RIPPLE_WAVES  = 0.6;      // ripple spatial frequency (per world-m)
+
+// Urban: where the overlay PNG is urban (the generator paints terrain_type
+// "urban" as CSS gray), scatter small building boxes that rise to roughly the
+// grass height, so a built-up cell reads as a low cluster of structures rather
+// than a flat gray patch. Same canvas-read + UV→world placement as the grass.
+const URBAN_BUILDING_COUNT  = 1200;               // box instances across all gray cells
+const URBAN_BUILDING_HEIGHT = GRASS_BLADE_HEIGHT; // ~grass height, per request (random ±30%)
+const URBAN_BUILDING_COLOR  = 0x9a9a9a;           // concrete gray; per-instance shade jittered
+
 // Ground plane covers the existing scenario world (±60 m). Both PNGs share the
 // same 613×636 pixel grid (one pixel = one 50 m AOI cell), and both have PNG
 // row 0 = north. We disable Three's default flipY so UV(0, 0) maps to the
@@ -193,6 +213,8 @@ async function start() {
 // horizontal compression before per-vertex bilinear sampling.
 let sampleHeight = () => 0;
 let detection = null;
+let water = null;   // river surface mesh (animated); null when the overlay has no water cells
+let urban = null;   // urban building cluster; null when the overlay has no gray cells
 try {
   const [colorTex, heightGrid, trenchMask] = await Promise.all([
     loadTextureAsync(TERRAIN_TEXTURE_URL),
@@ -246,6 +268,14 @@ try {
   // Sand + pebbles on open_field (tan) cells.
   const debris = buildOpenFieldDebris(colorTex.image, sampleHeight);
   if (debris) scene.add(debris);
+
+  // River surface on water (blue) cells.
+  water = buildWater(colorTex.image, sampleHeight);
+  if (water) scene.add(water);
+
+  // Building cluster on urban (gray) cells.
+  urban = buildUrbanBuildings(colorTex.image, sampleHeight);
+  if (urban) scene.add(urban);
 } catch (err) {
   console.warn('terrain not loaded — falling back to flat ground:', err.message);
 }
@@ -517,6 +547,164 @@ function buildOpenFieldDebris(colorImage, sampleHeightFn) {
   group.add(pebble);
 
   return group;
+}
+
+function buildWater(colorImage, sampleHeightFn) {
+  // Same canvas-read pattern as the grass/debris builders, but the matched
+  // class is water (CSS blue). One quad is emitted per water cell, draped on
+  // the terrain height so the river follows the ground; the resting positions
+  // are kept on userData.base so the tick loop can ripple Y each frame.
+  const w = colorImage.width;
+  const h = colorImage.height;
+  if (!w || !h) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(colorImage, 0, 0);
+  const px = ctx.getImageData(0, 0, w, h).data;
+
+  // Water overlay color is CSS blue (~0,0,255) at 0.8 alpha — B clearly
+  // dominates R and G. Tan open-field, green forest, gray urban and purple
+  // railway all fail this and stay dry.
+  const cells = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+      if (a > 40 && b > 150 && b > r + 60 && b > g + 60) cells.push(x, y);
+    }
+  }
+  if (cells.length === 0) return null;
+
+  // Cell (cx, cy) covers one source pixel; its four corners map to world with
+  // the same UV→world convention as sampleHeight (UV(0,0) = NW corner). Two
+  // triangles per cell; adjacent cells share corner heights (sampleHeight is
+  // continuous), so the surface is seamless.
+  const positions = [];
+  const toWX = u => u * PLANE_SIZE - PLANE_SIZE / 2;
+  const toWZ = v => PLANE_SIZE / 2 - v * PLANE_SIZE;
+  const cornerY = (wx, wz) => sampleHeightFn(wx, wz) + WATER_LEVEL_OFFSET;
+  for (let c = 0; c < cells.length; c += 2) {
+    const cx = cells[c], cy = cells[c + 1];
+    const x0 = toWX(cx / w),       x1 = toWX((cx + 1) / w);
+    const z0 = toWZ(cy / h),       z1 = toWZ((cy + 1) / h);
+    const ay = cornerY(x0, z0), by = cornerY(x1, z0);
+    const dy = cornerY(x1, z1), ey = cornerY(x0, z1);
+    positions.push(
+      x0, ay, z0,  x1, by, z0,  x1, dy, z1,
+      x0, ay, z0,  x1, dy, z1,  x0, ey, z1,
+    );
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: WATER_COLOR,
+    roughness: 0.22,
+    metalness: 0.0,
+    transparent: true,
+    opacity: 0.82,
+    emissive: 0x0b2230,    // faint glow keeps it readable without an env map
+    emissiveIntensity: 0.35,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'terrain.water';
+  mesh.receiveShadow = true;
+  mesh.userData.base = Float32Array.from(positions);   // resting surface for the ripple
+  return mesh;
+}
+
+function updateWater(time) {
+  if (!water) return;
+  const pos = water.geometry.attributes.position;
+  const base = water.userData.base;
+  for (let i = 0; i < pos.count; i++) {
+    const x = base[i * 3], z = base[i * 3 + 2];
+    const y = base[i * 3 + 1]
+      + WATER_RIPPLE_AMP * Math.sin(WATER_RIPPLE_SPEED * time + (x + z) * WATER_RIPPLE_WAVES);
+    pos.setY(i, y);
+  }
+  pos.needsUpdate = true;
+  water.geometry.computeVertexNormals();   // water cells are few — cheap to relight
+}
+
+function buildUrbanBuildings(colorImage, sampleHeightFn) {
+  // Same canvas-read pattern as the grass/debris/water builders, but the
+  // matched class is urban (CSS gray). Building boxes are scattered across the
+  // gray cells as a single InstancedMesh, rising to ~grass height with random
+  // footprint, yaw and per-instance shade so the cluster doesn't look uniform.
+  const w = colorImage.width;
+  const h = colorImage.height;
+  if (!w || !h) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(colorImage, 0, 0);
+  const px = ctx.getImageData(0, 0, w, h).data;
+
+  // Urban overlay color is CSS gray (~128,128,128) at 0.8 alpha — R≈G≈B in the
+  // mid range. Tan (R-dominant), forest green, water blue and railway purple
+  // all break the near-equal-channels test and stay building-free.
+  const grayCells = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+      if (a > 40 && r > 90 && r < 170 &&
+          Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25) {
+        grayCells.push(x, y);
+      }
+    }
+  }
+  if (grayCells.length === 0) return null;
+
+  // Unit box translated so its base sits at y=0; the per-instance Y scale then
+  // grows it upward from the ground and the instance position rides the terrain.
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+  boxGeo.translate(0, 0.5, 0);
+  const boxMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,   // base white — modulated by per-instance color
+    roughness: 0.9,
+    metalness: 0,
+  });
+
+  const mesh = new THREE.InstancedMesh(boxGeo, boxMat, URBAN_BUILDING_COUNT);
+  mesh.name = 'terrain.urban';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  const dummy = new THREE.Object3D();
+  const tmpColor = new THREE.Color();
+  const baseColor = new THREE.Color(URBAN_BUILDING_COLOR);
+  const cellCount = grayCells.length / 2;
+  for (let i = 0; i < URBAN_BUILDING_COUNT; i++) {
+    const c = Math.floor(Math.random() * cellCount) * 2;
+    const u = (grayCells[c] + Math.random()) / w;
+    const v = (grayCells[c + 1] + Math.random()) / h;
+    const wx = u * PLANE_SIZE - PLANE_SIZE / 2;
+    const wz = PLANE_SIZE / 2 - v * PLANE_SIZE;
+    const wy = sampleHeightFn(wx, wz);
+    const footW = 0.6 + Math.random() * 1.0;   // footprint width  (world-m)
+    const footD = 0.6 + Math.random() * 1.0;   // footprint depth
+    const height = URBAN_BUILDING_HEIGHT * (0.7 + Math.random() * 0.6);
+    dummy.position.set(wx, wy, wz);
+    dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    dummy.scale.set(footW, height, footD);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+    // Per-instance brightness so the block isn't a single flat gray.
+    const shade = 0.7 + Math.random() * 0.4;
+    tmpColor.copy(baseColor).multiplyScalar(shade);
+    mesh.setColorAt(i, tmpColor);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  return mesh;
 }
 
 // ---------- Scenario / Agents ----------
@@ -1327,31 +1515,95 @@ $btnDetect.addEventListener('click', () => {
 });
 
 // ---------- Battle graph popup ----------
-// 전투량(생존 유닛 수, 하락) + 금액(money.csv 누적 소비 비용, 상승)의 전체 타임라인을
-// 별도 창에 라인차트로 띄운다. 1초 간격으로 샘플링한다.
+// 전투량(생존 유닛 수, 하락)은 유닛 타입별로 분할, 금액(money.csv 누적 소비 비용, 상승)은
+// 팀 합계로 표시. 전체 타임라인을 1초 간격으로 샘플링해 별도 창에 라인차트로 띄운다.
+const GRAPH_TYPE_COLORS = {
+  infantry:        '#7fd17f',
+  tank:            '#ff7b6b',
+  artillery:       '#ffd166',
+  antitank:        '#c98bff',
+  drone:           '#4ea0ff',
+  self_dest_drone: '#ff9f43',
+  command_post:    '#e6edf3',
+};
+const GRAPH_TEAM_LABEL = { red: 'RED', blue: 'BLUE' };
+const GRAPH_TEAM_COLOR = { red: '#ff5b5b', blue: '#4ea0ff' };
+
 function buildGraphData() {
   const step = 1.0;
   const times = [];
   for (let t = 0; t <= scenario.duration + 1e-6; t += step) times.push(+t.toFixed(3));
 
-  const series = { red: { units: [], cost: [] }, blue: { units: [], cost: [] } };
-  for (const t of times) {
-    // 전투량 — 파괴(k_kill)되지 않은 유닛 수 (작전/무력화 모두 "전장에 남음")
-    const cnt = { red: 0, blue: 0 };
-    for (const ag of agents) {
-      const s = sampleAt(ag.spec.track, t, 0);
-      if (s.status !== 'k_kill' && cnt[ag.spec.team] !== undefined) cnt[ag.spec.team] += 1;
-    }
-    series.red.units.push({ t, n: cnt.red });
-    series.blue.units.push({ t, n: cnt.blue });
+  // 팀×타입별 생존 수 시계열 + 팀별 누적 비용 시계열
+  const unitsByTeamType = { red: {}, blue: {} };
+  for (const team of TEAM_ORDER) for (const ty of TYPE_ORDER) unitsByTeamType[team][ty] = [];
+  const costSeries = { red: [], blue: [] };
 
-    // 금액 — money.csv 누적 비용 (step-hold 샘플)
+  for (const t of times) {
+    const cnt = { red: {}, blue: {} };
+    for (const team of TEAM_ORDER) for (const ty of TYPE_ORDER) cnt[team][ty] = 0;
+    for (const ag of agents) {
+      const s = sampleAt(ag.spec.track, t, 0);  // 파괴(k_kill) 제외 = 전장에 남은 유닛
+      if (s.status !== 'k_kill' && cnt[ag.spec.team] && (ag.spec.type in cnt[ag.spec.team])) {
+        cnt[ag.spec.team][ag.spec.type] += 1;
+      }
+    }
+    for (const team of TEAM_ORDER) for (const ty of TYPE_ORDER) {
+      unitsByTeamType[team][ty].push(cnt[team][ty]);
+    }
     for (const team of TEAM_ORDER) {
-      const m = sampleMoney(moneySeries[team], t, 0);
-      series[team].cost.push({ t, total: m.total });
+      const m = sampleMoney(moneySeries[team], t, 0);  // step-hold 누적 비용
+      costSeries[team].push({ t, v: m.total });
     }
   }
-  return { duration: scenario.duration, currentTime, series };
+
+  // 전투량 합계 차트 — RED vs BLUE 비교 (전 타입 합산)
+  const charts = [];
+  const totalSeries = {};
+  for (const team of TEAM_ORDER) {
+    totalSeries[team] = times.map((t, i) => {
+      let n = 0;
+      for (const ty of TYPE_ORDER) n += unitsByTeamType[team][ty][i];
+      return { t, v: n };
+    });
+  }
+  charts.push({
+    title: '전투량 추이 — RED vs BLUE (합계)',
+    yFormat: v => String(Math.round(v)),
+    series: TEAM_ORDER.map(team => ({
+      points: totalSeries[team],
+      color: GRAPH_TEAM_COLOR[team],
+      label: GRAPH_TEAM_LABEL[team],
+    })),
+  });
+
+  // 전투량 차트 — 팀별로 한 개씩, 유닛 타입별 라인 (해당 팀에 존재하는 타입만)
+  for (const team of TEAM_ORDER) {
+    const present = TYPE_ORDER.filter(ty => totals[team][ty] > 0);
+    if (present.length === 0) continue;
+    charts.push({
+      title: `전투량 추이 — ${GRAPH_TEAM_LABEL[team]} (유닛 타입별)`,
+      yFormat: v => String(Math.round(v)),
+      series: present.map(ty => ({
+        points: times.map((t, i) => ({ t, v: unitsByTeamType[team][ty][i] })),
+        color: GRAPH_TYPE_COLORS[ty] ?? '#9aa7b3',
+        label: TYPE_LABELS[ty] ?? ty,
+      })),
+    });
+  }
+
+  // 금액 차트 — 팀 합계 누적 비용
+  charts.push({
+    title: '금액 추이 (누적 소비 비용)',
+    yFormat: v => '$' + Math.round(v).toLocaleString('en-US'),
+    series: TEAM_ORDER.map(team => ({
+      points: costSeries[team],
+      color: GRAPH_TEAM_COLOR[team],
+      label: GRAPH_TEAM_LABEL[team],
+    })),
+  });
+
+  return { duration: scenario.duration, currentTime, charts };
 }
 
 const $btnGraph = document.getElementById('btn-graph');
@@ -1579,6 +1831,9 @@ function tick() {
 
   // spin drone rotors
   for (const r of rotorMeshes) r.rotation.y += dt * 40;
+
+  // ripple the river surface
+  updateWater(performance.now() * 0.001);
 
   // pulse objective ring
   const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.003);
