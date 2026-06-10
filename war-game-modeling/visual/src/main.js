@@ -840,6 +840,32 @@ const agentsById = new Map(agents.map(a => [a.spec.id, a]));
 // walked back up to the owning agent (for the hover tooltip).
 for (const ag of agents) ag.mesh.userData.agentId = ag.spec.id;
 
+// Death-site pick proxies: a destroyed unit hides its battlefield mesh, so the
+// raycaster can no longer resolve it. For every unit that eventually dies we
+// drop an invisible flat disc on its death site. The disc is never rendered
+// (mesh.visible = false) but the raycaster ignores the visible flag, so it
+// stays clickable; pickAgentAt only honors a proxy hit once that unit is
+// actually k_kill. This makes the team-colored ring / wreckage selectable.
+const DEATH_PROXY_RADIUS = 1.6;   // world-m; comfortable click target over the ring
+for (const ag of agents) {
+  if (!ag.deathPos) continue;   // never dies → no proxy needed
+  const proxy = new THREE.Mesh(
+    new THREE.CircleGeometry(DEATH_PROXY_RADIUS, 16),
+    new THREE.MeshBasicMaterial(),
+  );
+  proxy.rotation.x = -Math.PI / 2;   // lay flat on XZ
+  proxy.visible = false;             // invisible to the eye, still raycastable
+  proxy.position.set(
+    ag.deathPos.x,
+    sampleHeight(ag.deathPos.x, ag.deathPos.z) + 0.05,
+    ag.deathPos.z,
+  );
+  proxy.userData.agentId = ag.spec.id;
+  proxy.userData.isDeathProxy = true;
+  scene.add(proxy);
+  ag.pickProxy = proxy;
+}
+
 // Drone rotor spin animation: collect rotor meshes
 const rotorMeshes = [];
 agents.forEach(a => a.mesh.traverse(o => { if (o.userData?.spin) rotorMeshes.push(o); }));
@@ -1632,7 +1658,10 @@ window.addEventListener('keydown', e => {
 const $hoverTip = document.getElementById('hover-tip');
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
-const pickables = agents.map(a => a.mesh);
+const pickables = [
+  ...agents.map(a => a.mesh),
+  ...agents.map(a => a.pickProxy).filter(Boolean),   // death-site discs (dead units)
+];
 
 function agentFromObject(obj) {
   while (obj) {
@@ -1657,7 +1686,15 @@ function pickAgentAt(clientX, clientY) {
   const hits = raycaster.intersectObjects(pickables, true);
   for (const h of hits) {
     const cand = agentFromObject(h.object);
-    if (cand && cand.mesh.visible) return cand;
+    if (!cand) continue;
+    if (h.object.userData.isDeathProxy) {
+      // Death-site disc: only selectable once the unit is actually destroyed,
+      // so clicking that ground spot before the unit dies hits nothing.
+      if (cand.lastSample?.status === 'k_kill') return cand;
+    } else if (cand.mesh.visible) {
+      // Living / incapacitated unit — its mesh is on screen.
+      return cand;
+    }
   }
   return null;
 }
