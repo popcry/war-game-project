@@ -32,6 +32,7 @@ const HEIGHT_GRID_URL = '../results/vuhledar_5x_height_grid.png';
 // trench walls. sampleHeight() for unit placement is left untouched, so
 // units continue to stand on the un-trenched surface.
 const TRENCH_MASK_URL = '../results/vuhledar_5x_trench_mask.csv';
+const BRIDGE_MASK_URL = '../results/vuhledar_5x_bridge_mask.csv';
 const TRENCH_DEPTH    = 2.5;    // world-m depression where mask = 1
 const TRENCH_FLIP_V   = false;  // true if CSV row 0 = south (default assumes north)
 
@@ -221,10 +222,11 @@ let detection = null;
 let water = null;   // river surface mesh (animated); null when the overlay has no water cells
 let urban = null;   // urban building cluster; null when the overlay has no gray cells
 try {
-  const [colorTex, heightGrid, trenchMask] = await Promise.all([
+  const [colorTex, heightGrid, trenchMask, bridgeMask] = await Promise.all([
     loadTextureAsync(TERRAIN_TEXTURE_URL),
     loadGrayscaleGrid(HEIGHT_GRID_URL),
     loadCsvMask(TRENCH_MASK_URL),
+    loadCsvMask(BRIDGE_MASK_URL).catch(() => null),
   ]);
   colorTex.colorSpace = THREE.SRGBColorSpace;
   colorTex.flipY = false;
@@ -281,6 +283,12 @@ try {
   // Building cluster on urban (gray) cells.
   urban = buildUrbanBuildings(colorTex.image, sampleHeight);
   if (urban) scene.add(urban);
+
+  // Bridges on bridge_mask cells (강 위에 평평한 갈색 판 — 도로 표면).
+  if (bridgeMask) {
+    const bridges = buildBridges(bridgeMask, sampleHeight);
+    if (bridges) scene.add(bridges);
+  }
 } catch (err) {
   console.warn('terrain not loaded — falling back to flat ground:', err.message);
 }
@@ -635,6 +643,61 @@ function updateWater(time) {
   }
   pos.needsUpdate = true;
   water.geometry.computeVertexNormals();   // water cells are few — cheap to relight
+}
+
+function buildBridges(bridgeMask, sampleHeightFn) {
+  // bridge_mask는 loadCsvMask가 반환한 {w, h, grid}. 각 교량 셀 위에 갈색 판자 메쉬.
+  // 셀에 꽉 채우고 강 표면 위로 충분히 띄워 도로처럼 보이게.
+  const grid = bridgeMask?.grid;
+  const w = bridgeMask?.w;
+  const h = bridgeMask?.h;
+  if (!grid || !w || !h) return null;
+  const cells = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (grid[y * w + x] > 0.5) cells.push(x, y);
+    }
+  }
+  if (cells.length === 0) {
+    console.warn('buildBridges: bridge_mask has no cells');
+    return null;
+  }
+  console.log(`buildBridges: rendering ${cells.length / 2} bridge cells`);
+
+  const cellCount = cells.length / 2;
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+  boxGeo.translate(0, 0.5, 0);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x8b5a2b,   // 진한 갈색 (나무 색)
+    roughness: 0.85,
+    metalness: 0,
+  });
+  const mesh = new THREE.InstancedMesh(boxGeo, mat, cellCount);
+  mesh.name = 'terrain.bridge';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  const cellW = PLANE_SIZE / w;
+  const cellD = PLANE_SIZE / h;
+  const BRIDGE_HEIGHT = 0.25;  // 충분히 두꺼워 강 위로 잘 보임 (water 위로 솟음)
+  const BRIDGE_LIFT   = 0.10;  // 지면에서 약간 띄움 — 강 표면 위로 확실히
+
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < cellCount; i++) {
+    const cx = cells[i * 2];
+    const cy = cells[i * 2 + 1];
+    const u = (cx + 0.5) / w;
+    const v = (cy + 0.5) / h;
+    const wx = u * PLANE_SIZE - PLANE_SIZE / 2;
+    const wz = PLANE_SIZE / 2 - v * PLANE_SIZE;
+    const wy = sampleHeightFn(wx, wz);
+    dummy.position.set(wx, wy + BRIDGE_LIFT, wz);
+    dummy.scale.set(cellW * 0.98, BRIDGE_HEIGHT, cellD * 0.98);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  return mesh;
 }
 
 function buildUrbanBuildings(colorImage, sampleHeightFn) {

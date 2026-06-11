@@ -1,5 +1,7 @@
 import os
-from typing import Any, Dict, Tuple
+import math
+from collections import deque
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -68,6 +70,7 @@ class Terrain:
         self.urban_mask = None
         self.forest_mask = None
         self.railway_mask = None
+        self.bridge_mask = None
         self.road_type_data = None
         self.MOUNTAIN_THRESHOLD = 50 / PIXEL_TO_METER_SCALE
         self.RIVER_THRESHOLD = 39 / PIXEL_TO_METER_SCALE
@@ -84,6 +87,7 @@ class Terrain:
         urban_file_cache = self.terrain_config.get("urban_mask_file")
         forest_file_cache = self.terrain_config.get("forest_mask_file")
         railway_file_cache = self.terrain_config.get("railway_mask_file")
+        bridge_file_cache = self.terrain_config.get("bridge_mask_file")
         cache_key = (
             elevation_file,
             river_file,
@@ -92,6 +96,7 @@ class Terrain:
             urban_file_cache,
             forest_file_cache,
             railway_file_cache,
+            bridge_file_cache,
             trench_labels,
             self.terrain_config.get("mountain_threshold_m"),
             self.terrain_config.get("mountain_elevation_quantile", 0.75),
@@ -105,6 +110,7 @@ class Terrain:
             self.urban_mask = cached["urban_mask"]
             self.forest_mask = cached["forest_mask"]
             self.railway_mask = cached["railway_mask"]
+            self.bridge_mask = cached["bridge_mask"]
             self.road_type_data = cached["road_type_data"]
             self.MOUNTAIN_THRESHOLD = cached["mountain_threshold"]
             self.RIVER_THRESHOLD = None
@@ -153,6 +159,13 @@ class Terrain:
         else:
             self.railway_mask = np.zeros(shape, dtype=bool)
 
+        # bridge mask (교량) — 강 위 통행 허용 + 도로 속도
+        bridge_file = self.terrain_config.get("bridge_mask_file")
+        if bridge_file and os.path.exists(bridge_file):
+            self.bridge_mask = self._read_csv_values(bridge_file).astype(float) > 0
+        else:
+            self.bridge_mask = np.zeros(shape, dtype=bool)
+
         threshold_m = self.terrain_config.get("mountain_threshold_m")
         if threshold_m is None:
             quantile = float(self.terrain_config.get("mountain_elevation_quantile", 0.75))
@@ -167,6 +180,7 @@ class Terrain:
             "urban_mask": self.urban_mask,
             "forest_mask": self.forest_mask,
             "railway_mask": self.railway_mask,
+            "bridge_mask": self.bridge_mask,
             "road_type_data": self.road_type_data,
             "mountain_threshold": self.MOUNTAIN_THRESHOLD,
         }
@@ -225,6 +239,13 @@ class Terrain:
             return False
         return bool(self.railway_mask[y_int, x_int])
 
+    def is_bridge(self, position: Tuple[float, float]) -> bool:
+        """교량 셀 여부 — 강 위에 있어도 모든 지상 유닛 통행 가능, 도로 속도."""
+        x_int, y_int = self._index_position(position)
+        if not self._in_bounds(x_int, y_int) or self.bridge_mask is None:
+            return False
+        return bool(self.bridge_mask[y_int, x_int])
+
     def is_mountain(self, position: Tuple[float, float]) -> bool:
         """언덕·산악 셀 여부 — DEM elevation이 mountain_threshold를 넘으면 True."""
         return self.get_elevation(position) >= self.MOUNTAIN_THRESHOLD
@@ -232,11 +253,15 @@ class Terrain:
     def is_passable(self, position: Tuple[float, float], unit_type) -> bool:
         """지상 유닛 통행 가능 여부.
         - 드론/자폭드론: 항상 통과 (비행)
+        - 교량 위: 모든 지상 유닛 통과 (강 차단 무시)
         - 보병(RIFLE), 대전차(ANTI_TANK): 강 통과 가능 (도하), 건물·언덕은 차단
         - 그 외 지상(전차·포병 등): 강·건물·언덕 모두 차단
         """
         from model.unit import UnitType
         if unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
+            return True
+        # 교량은 다른 차단보다 우선 — 강 위에 놓여도 통행 허용
+        if self.is_bridge(position):
             return True
         if self.is_urban(position):
             return False
@@ -278,12 +303,15 @@ class Terrain:
         return road_type if road_type else "none"
 
     def get_terrain_type(self, position: Tuple[int, int]) -> str:
-        """Return terrain by priority: river → urban → trench → road → railway → forest → mountain → normal.
+        """Return terrain by priority: bridge → river → urban → trench → road → railway → forest → mountain → normal.
 
         통행 불가(차단): river, urban, mountain
         통행 가능(감속): trench, railway, forest
-        가속: road
+        가속: road, bridge
+        교량은 강보다 우선 (강 셀 위에 교량이 놓일 때 강이 아닌 교량으로 분류)
         """
+        if self.layered and self.is_bridge(position):
+            return "bridge"
         if self.is_river(position):
             return "river"
         if self.layered and self.is_urban(position):
@@ -324,3 +352,122 @@ class Terrain:
         if terrain_type == "river" and unit.unit_type in (UnitType.RIFLE, UnitType.ANTI_TANK):
             return float(self.terrain_decay_rates.get("river_infantry", 0.2))
         return float(self.terrain_decay_rates.get(terrain_type, 1.0))
+
+    # ============================================================
+    # 경로 탐색 (BFS 기반 거리장) — A* 보다 단순하지만 충분히 빠름
+    # 캐시: (goal_x, goal_y, unit_group) → 2D 거리장 (int)
+    # ============================================================
+    @staticmethod
+    def _passability_group(unit_type) -> str:
+        """is_passable 결과가 같은 unit_type들끼리 묶어 거리장 1번만 계산."""
+        if unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
+            return "air"
+        if unit_type in (UnitType.RIFLE, UnitType.ANTI_TANK):
+            return "amphib"   # 강 통과 가능
+        return "ground"        # 강 차단 (TANK/ARTILLERY/CP)
+
+    def _compute_distance_field(self, goal_x: int, goal_y: int, group: str) -> np.ndarray:
+        """벡터화 wave-propagation BFS — 8방향 numpy 시프트.
+        반환: (H, W) int32, 도달 불가 셀 = -1, 골부터 거리(셀 수).
+
+        성능: 1200×875 ≈ 2000 iter × 1ms numpy op = ~2초. Python loop 대비 50배+ 빠름.
+        """
+        H, W = self.dem_data.shape
+        field = np.full((H, W), -1, dtype=np.int32)
+        if not (0 <= goal_x < W and 0 <= goal_y < H):
+            return field
+
+        # 통행 가능 마스크 (그룹별 1번)
+        passable = np.ones((H, W), dtype=bool)
+        if self.urban_mask is not None:
+            passable &= ~self.urban_mask
+        if hasattr(self, 'MOUNTAIN_THRESHOLD') and self.MOUNTAIN_THRESHOLD is not None:
+            # MOUNTAIN_THRESHOLD는 elevation의 "scaled" 단위 (m / PIXEL_TO_METER_SCALE)
+            # dem_data는 raw meters. 비교 위해 dem / scale 사용해 동일 단위
+            from model.movement import PIXEL_TO_METER_SCALE
+            passable &= (self.dem_data / PIXEL_TO_METER_SCALE) < self.MOUNTAIN_THRESHOLD
+        if group == "ground" and self.river_mask is not None:
+            blocked_water = self.river_mask.copy()
+            if self.bridge_mask is not None:
+                blocked_water = blocked_water & ~self.bridge_mask
+            passable &= ~blocked_water
+        # amphib는 강 통과
+
+        if not passable[goal_y, goal_x]:
+            return field
+
+        # Wave-propagation BFS (8-방향)
+        field[goal_y, goal_x] = 0
+        frontier = np.zeros_like(passable, dtype=bool)
+        frontier[goal_y, goal_x] = True
+
+        step = 0
+        max_iter = H + W   # 대각 최대 거리
+        while frontier.any() and step < max_iter:
+            step += 1
+            # 8방향 시프트로 next wave 만들기 (OR)
+            nxt = np.zeros_like(frontier)
+            nxt[1:, :]   |= frontier[:-1, :]   # 위 → 아래
+            nxt[:-1, :]  |= frontier[1:, :]    # 아래 → 위
+            nxt[:, 1:]   |= frontier[:, :-1]   # 왼쪽 → 오른쪽
+            nxt[:, :-1]  |= frontier[:, 1:]    # 오른쪽 → 왼쪽
+            nxt[1:, 1:]  |= frontier[:-1, :-1]  # 대각
+            nxt[1:, :-1] |= frontier[:-1, 1:]
+            nxt[:-1, 1:] |= frontier[1:, :-1]
+            nxt[:-1, :-1]|= frontier[1:, 1:]
+            # 통행 가능 + 미방문만
+            nxt &= passable & (field == -1)
+            field[nxt] = step
+            frontier = nxt
+        return field
+
+    # 골을 50px 격자에 스냅해 캐시 — objective_jitter로 유닛별로 ±20px 다른 골이
+    # 모두 같은 거리장 공유 (각 유닛마다 BFS 재계산 방지)
+    _GOAL_SNAP = 50
+
+    def get_distance_field(self, goal: Tuple[float, float], unit_type) -> np.ndarray:
+        """캐시된 거리장 반환. 골은 50px 격자 스냅으로 캐시 키 정규화."""
+        if not hasattr(self, '_dist_cache'):
+            self._dist_cache = {}
+        snap = self._GOAL_SNAP
+        gx = (int(goal[0]) // snap) * snap + snap // 2
+        gy = (int(goal[1]) // snap) * snap + snap // 2
+        key = (gx, gy, self._passability_group(unit_type))
+        if key not in self._dist_cache:
+            print(f"[Terrain] BFS 거리장 계산: goal=({gx},{gy}), group={key[2]} ...", flush=True)
+            self._dist_cache[key] = self._compute_distance_field(gx, gy, key[2])
+            n_reach = int((self._dist_cache[key] >= 0).sum())
+            print(f"          → 도달 가능 셀 {n_reach:,}개", flush=True)
+        return self._dist_cache[key]
+
+    def get_path_direction(self, start: Tuple[float, float], goal: Tuple[float, float],
+                            unit_type) -> Optional[Tuple[float, float]]:
+        """start 셀에서 goal로 가는 다음 한 발의 방향 (정규화된 dx, dy).
+        거리장에서 인접 8셀 중 거리가 가장 작은 곳을 선택.
+        None 반환 = 경로 없음 (직선 폴백).
+        """
+        if self._passability_group(unit_type) == "air":
+            return None   # 드론은 그냥 직선
+        field = self.get_distance_field(goal, unit_type)
+        x0, y0 = int(start[0]), int(start[1])
+        H, W = field.shape
+        if not (0 <= x0 < W and 0 <= y0 < H):
+            return None
+        cur = field[y0, x0]
+        if cur < 0:
+            # 출발지가 도달 불가 영역 (예: 강 안에서 갇힌 전차) — 직선으로
+            return None
+        best_d = cur
+        best_dx, best_dy = 0, 0
+        DIRS = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
+        for dx, dy in DIRS:
+            nx, ny = x0 + dx, y0 + dy
+            if 0 <= nx < W and 0 <= ny < H:
+                d = field[ny, nx]
+                if 0 <= d < best_d:
+                    best_d = d
+                    best_dx, best_dy = dx, dy
+        if best_dx == 0 and best_dy == 0:
+            return None   # 이미 도착 (또는 주변에 더 가까운 셀 없음)
+        norm = math.sqrt(best_dx * best_dx + best_dy * best_dy)
+        return (best_dx / norm, best_dy / norm)

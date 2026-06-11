@@ -94,7 +94,7 @@ probabilities:
       - ["Red",  "RIFLE", "ANTI_TANK", "Stand",  500, "-", 0.55, 0.45, 0.00, 0.00, 0.40, null]
       - ["Red",  "RIFLE", "ANTI_TANK", "Prone",  500, "-", 0.40, 0.32, 0.00, 0.00, 0.40, null]
       - ["Red",  "RIFLE", "ANTI_TANK", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
-      - ["Red", "ANTI_TANK", "TANK", "All", "200(Ph=0.5)", "-", 0.70, 0.00, 0.00, 0.00, 0.80, null]
+      - ["Red", "ANTI_TANK", "TANK", "All", 2500, 75, 0.98, 0.95, 0.94, 0.92, 0.90, null]
       - ["Red", "SELF_DEST_DRONE", "TANK", "All", 40000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
       - ["Red", "SELF_DEST_DRONE", "RIFLE", "All", 40000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
       - ["Blue", "TANK", "TANK", "Open", 3000, "-", 0.70, 0.60, 0.35, 0.15, 0.70, null]
@@ -286,7 +286,7 @@ unit_overrides:
     ARTILLERY:
       weapon_range_m: 65000
     ANTI_TANK:
-      weapon_range_m: 200
+      weapon_range_m: 2500
     SELF_DEST_DRONE:
       weapon_range_m: 40000
   BLUE:
@@ -302,28 +302,28 @@ phases:
     phase_1:
       TAI: [437, 374]    # BLUE 진영 정찰
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
-      maneuver_objective: [[437, 374]]   # 공격 — BLUE 진영 중심으로 진격
+      maneuver_objective: [[364, 323]]   # 돌진 — BLUE 지휘소까지 깊숙이 침투
     phase_2:
       TAI: [437, 374]
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
-      maneuver_objective: [[437, 374]]
+      maneuver_objective: [[364, 323]]
     phase_3:
       TAI: [437, 374]
       fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
-      maneuver_objective: [[437, 374]]   # BLUE 지휘소까지 압박
+      maneuver_objective: [[364, 323]]   # BLUE 지휘소까지 압박
   BLUE:
     phase_1:
       TAI: [900, 600]    # 5x map: RED 진영(동남) 정찰
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
-      maneuver_objective: [[528, 415]]    # 방어 전진 — RED 방향으로 100px만 전진해서 멈춤
+      maneuver_objective: [[520, 430]]    # 방어 전진 — BLUE 중심(~433,367)에서 RED(SE) 방향 약 100px 전진
     phase_2:
       TAI: [900, 600]
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
-      maneuver_objective: [[528, 415]]    # 방어 전진 위치 유지
+      maneuver_objective: [[520, 430]]    # 방어 — 진형 유지
     phase_3:
       TAI: [900, 600]
       fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
-      maneuver_objective: [[528, 415]]    # 방어 전진 위치 유지 (RED 근접 시 교전)
+      maneuver_objective: [[520, 430]]    # 방어 — 진형 유지 (RED 근접 시 교전)
 
 # Phase 전환 조건
 phase_transitions:
@@ -471,6 +471,7 @@ terrain:
   urban_mask_file: "database/vuhledar_5x_urban_mask.csv"     # 건물·시가지 — 지상 통행 불가
   forest_mask_file: "database/vuhledar_5x_forest_mask.csv"   # 산림 — 지상 감속
   railway_mask_file: "database/vuhledar_5x_railway_mask.csv" # 철도 회랑 — 횡단 감속
+  bridge_mask_file: "database/vuhledar_5x_bridge_mask.csv"   # 교량 — 강 위 통행 허용 + 도로 속도
   trench_labels: [1, "1", "trench", "true", "t"]
   mountain_elevation_quantile: 0.75
   mobility:
@@ -483,6 +484,7 @@ terrain:
     forest: 0.5       # 산림 — 절반 속도
     railway: 0.6      # 철도 — 둑·선로 횡단 어려움
     river_infantry: 0.2   # 보병·대전차 도하 속도 (river=0이지만 RIFLE/ANTI_TANK는 이 값 적용)
+    bridge: 1.0       # 교량 — 도로와 동일 (모든 지상 유닛 통과)
   visibility:
     normal: 1.0
     mountain: 0.8

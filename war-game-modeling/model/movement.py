@@ -68,26 +68,30 @@ class Movement:
     # 차단 시 우회: 좁은 각부터 넓은 각까지, 양쪽으로 — 벽을 따라 옆으로 미끄러지듯 전진
     _BYPASS_ANGLES = [math.radians(a) for a in
                       (30, -30, 45, -45, 60, -60, 90, -90, 120, -120, 150, -150)]
-    # 우회 실패 시 보폭을 줄여 좁은 틈으로 들어가도록 재시도
+    # 막혔을 때 보폭을 줄여 좁은 틈으로 들어가도록 재시도
     _STEP_FRACTIONS = [1.0, 0.5, 0.25]
+    # 모든 시도 실패 시 1셀 마이크로 스텝으로 벽 따라 미끄러지기 (path 검사 X, 목적지만)
+    _MICRO_STEP_PX = 1.0   # 1 px = 1 셀 = pixel_to_meter_scale 미터
 
     def _try_passable_step(self, unit: Unit, dx: float, dy: float, speed: float, time_step: float):
-        """(dx,dy) 정규화 방향에서 직진/우회를 시도.
-        - 직진 → ±30/45/60/90/120/150° 회전 순으로 검사
-        - 각도가 모두 막히면 보폭을 1.0/0.5/0.25배로 줄여 재시도 (좁은 틈 통과)
-        반환: (next_x, next_y) 또는 None (모두 막힘).
+        """(dx,dy) 정규화 방향에서 이동을 시도. 모두 막혀도 마이크로 스텝으로 벽을 따라 슬라이드.
+
+        - 직진 full step → ±30..±150° 우회 (전체 경로 통행 검사)
+        - 보폭 0.5×, 0.25×로 같은 시도 반복 (좁은 틈)
+        - 위 모두 실패: **1셀 마이크로 스텝**으로 옆에 있는 통행 가능 셀로 이동
+          (전체 경로가 아니라 1셀 앞 목적지 셀만 검사 → 벽 가장자리에서 옆으로 미끄러짐)
+        반환: (next_x, next_y) 또는 None (전 방향 통행 불가).
         """
         cur = unit.position
         full_step = speed * time_step
 
-        # 1) 직진 (full step 우선)
+        # 1) 정상 보폭들: 직진 + 우회 + 경로 검사
         for frac in self._STEP_FRACTIONS:
             step = full_step * frac
             nx = cur[0] + dx * step
             ny = cur[1] + dy * step
             if self.terrain.is_passable_path(cur, (nx, ny), unit.unit_type):
                 return (nx, ny)
-            # 2) 우회 (±30 ~ ±150)
             for a in self._BYPASS_ANGLES:
                 ca, sa = math.cos(a), math.sin(a)
                 rdx = dx * ca - dy * sa
@@ -96,6 +100,18 @@ class Movement:
                 ny = cur[1] + rdy * step
                 if self.terrain.is_passable_path(cur, (nx, ny), unit.unit_type):
                     return (nx, ny)
+
+        # 2) 마이크로 스텝 — 벽을 따라 옆으로 1셀씩 슬라이드 (목적지만 검사)
+        # 직진 방향에서 시작해 우회 각도까지 시도. 작은 step이라 경로 검사 안 해도 안전.
+        for a in [0.0] + self._BYPASS_ANGLES:
+            ca, sa = math.cos(a), math.sin(a)
+            rdx = dx * ca - dy * sa
+            rdy = dx * sa + dy * ca
+            nx = cur[0] + rdx * self._MICRO_STEP_PX
+            ny = cur[1] + rdy * self._MICRO_STEP_PX
+            if self.terrain.is_passable((nx, ny), unit.unit_type):
+                return (nx, ny)
+
         return None
 
     def calculate_drone_orbit_objective(self, unit: Unit, current_time: float,
@@ -343,7 +359,14 @@ class Movement:
             dx /= distance
             dy /= distance
 
-        # 다음 위치 계산 + 우회 시도 (강·건물·언덕 막히면 ±각도 회전)
+        # === BFS 거리장 기반 경로 방향 (사용 가능하면 직선 대신 적용) ===
+        # 거리장은 통행 가능 셀의 "골까지 셀 거리"를 미리 계산.
+        # 인접 8셀 중 거리가 가장 작은 곳으로 한 발씩 → 자연스럽게 강·건물 우회.
+        path_dir = self.terrain.get_path_direction(unit.position, unit.objective, unit.unit_type)
+        if path_dir is not None:
+            dx, dy = path_dir
+
+        # 다음 위치 계산 + 우회 시도 (path_dir이 잘못된 곳을 가리켜도 우회로 보정)
         speed = self.get_unit_speed(unit, unit.position)
         step = self._try_passable_step(unit, dx, dy, speed, time_step)
         if step is None:
