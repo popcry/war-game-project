@@ -473,7 +473,9 @@ terrain:
   railway_mask_file: "database/vuhledar_5x_railway_mask.csv" # 철도 회랑 — 횡단 감속
   bridge_mask_file: "database/vuhledar_5x_bridge_mask.csv"   # 교량 — 강 위 통행 허용 + 도로 속도
   trench_labels: [1, "1", "trench", "true", "t"]
-  mountain_elevation_quantile: 0.75
+  # Vuhledar는 평야 — 산악 비활성화 (지도에 안 보이고, deployment 자유롭게 둘 수 있게)
+  mountain_threshold_m: 999999       # 도달 불가능한 고도 → is_mountain 항상 False
+  mountain_elevation_quantile: 0.95  # (mountain_threshold_m 설정 시 무시됨)
   mobility:
     normal: 0.9       # open field — 살짝 감속 (도로 대비 90%)
     mountain: 0.0     # 차단 (is_passable; 곱연산 안전망)

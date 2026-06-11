@@ -533,10 +533,13 @@ class Simulation:
                 next_event = self.handle_event(event)
                 if next_event:
                     heapq.heappush(self.events, next_event)
-                
-                # 각 이벤트 처리 후 모든 유닛의 탐지 상태와 사격 가능 타겟 목록 업데이트
+
+            # 탐지/사격가능은 모든 이벤트 처리 후 1번만 갱신
+            # (handle_event는 detection을 안 씀 — fire는 event.target_id로 직접 처리)
+            # 이벤트마다 반복하던 N²×M 비용 → N²로 감소 (수 ~ 수십 배 가속)
+            if current_events:
                 for unit in self.units:
-                    unit.clear_targets()  # 이전 탐지 목록 초기화
+                    unit.clear_targets()
                 for unit in self.units:
                     self.detect.update_detection(unit, self.units, self.sim_speed)
                 for team in [Team.RED, Team.BLUE]:
