@@ -71,11 +71,12 @@ const WATER_RIPPLE_WAVES  = 0.6;      // ripple spatial frequency (per world-m)
 // a low cluster of structures rather than a flat gray patch. Same canvas-read +
 // UV→world placement as the grass. Tuned to a finer grain — many short, small-
 // footprint rubble/low-rise boxes — so the cluster looks granular up close.
-const URBAN_BUILDING_COUNT   = 3000;   // box instances across all gray cells (more, since each is smaller)
-const URBAN_BUILDING_HEIGHT  = 0.55;   // world-m base height — low (random ±30%), well under grass
-const URBAN_FOOTPRINT_MIN    = 0.22;   // smallest footprint edge (world-m)
-const URBAN_FOOTPRINT_JITTER = 0.45;   // added random footprint span — small grains
-const URBAN_BUILDING_COLOR   = 0x9a9a9a; // concrete gray; per-instance shade jittered
+// Plane 120m / 1009 cells width ≈ 0.119m per cell. 각 urban 셀에 정확히 1개 건물
+// (셀에 꽉 차게, 높이 다양 → 도심 스카이라인 느낌).
+const URBAN_CELL_FILL_RATIO  = 0.85;   // 건물 footprint = 셀 크기 × 이 비율 (셀 안에 머묾)
+const URBAN_BUILDING_HEIGHT_MIN  = 0.25; // 최소 높이 (단층 건물)
+const URBAN_BUILDING_HEIGHT_MAX  = 0.85; // 최대 높이 (중층/고층 빌딩)
+const URBAN_BUILDING_COLOR   = 0x9a9a9a; // 콘크리트 회색 (per-instance shade로 변주)
 
 // Ground plane covers the existing scenario world (±60 m). Both PNGs share the
 // same 613×636 pixel grid (one pixel = one 50 m AOI cell), and both have PNG
@@ -677,31 +678,42 @@ function buildUrbanBuildings(colorImage, sampleHeightFn) {
     metalness: 0,
   });
 
-  const mesh = new THREE.InstancedMesh(boxGeo, boxMat, URBAN_BUILDING_COUNT);
+  // 각 urban 셀에 정확히 1개 건물 — InstancedMesh 사이즈는 cellCount
+  const cellCount = grayCells.length / 2;
+  const mesh = new THREE.InstancedMesh(boxGeo, boxMat, cellCount);
   mesh.name = 'terrain.urban';
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 
+  // 셀 1개에 해당하는 world-m 폭 — 1009 cells 가 PLANE_SIZE에 매핑
+  const cellW = PLANE_SIZE / w;
+  const cellD = PLANE_SIZE / h;
+  const footW = cellW * URBAN_CELL_FILL_RATIO;
+  const footD = cellD * URBAN_CELL_FILL_RATIO;
+
   const dummy = new THREE.Object3D();
   const tmpColor = new THREE.Color();
   const baseColor = new THREE.Color(URBAN_BUILDING_COLOR);
-  const cellCount = grayCells.length / 2;
-  for (let i = 0; i < URBAN_BUILDING_COUNT; i++) {
-    const c = Math.floor(Math.random() * cellCount) * 2;
-    const u = (grayCells[c] + Math.random()) / w;
-    const v = (grayCells[c + 1] + Math.random()) / h;
+
+  for (let i = 0; i < cellCount; i++) {
+    const cx = grayCells[i * 2];
+    const cy = grayCells[i * 2 + 1];
+    // 셀 중앙 — 건물이 셀 안에 정확히 위치
+    const u = (cx + 0.5) / w;
+    const v = (cy + 0.5) / h;
     const wx = u * PLANE_SIZE - PLANE_SIZE / 2;
     const wz = PLANE_SIZE / 2 - v * PLANE_SIZE;
     const wy = sampleHeightFn(wx, wz);
-    const footW = URBAN_FOOTPRINT_MIN + Math.random() * URBAN_FOOTPRINT_JITTER;   // footprint width  (world-m)
-    const footD = URBAN_FOOTPRINT_MIN + Math.random() * URBAN_FOOTPRINT_JITTER;   // footprint depth
-    const height = URBAN_BUILDING_HEIGHT * (0.7 + Math.random() * 0.6);
+    // 높이는 셀마다 변주 — 단층부터 중층까지 (스카이라인 느낌)
+    const heightFrac = Math.random();
+    const height = URBAN_BUILDING_HEIGHT_MIN +
+                   (URBAN_BUILDING_HEIGHT_MAX - URBAN_BUILDING_HEIGHT_MIN) * (heightFrac * heightFrac);
     dummy.position.set(wx, wy, wz);
-    dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    // 축 정렬 (도시 격자 느낌) — rotation 없음
     dummy.scale.set(footW, height, footD);
     dummy.updateMatrix();
     mesh.setMatrixAt(i, dummy.matrix);
-    // Per-instance brightness so the block isn't a single flat gray.
+    // 셀별 명도 변주 — 건물별 색상 차이로 도심 다양성 표현
     const shade = 0.7 + Math.random() * 0.4;
     tmpColor.copy(baseColor).multiplyScalar(shade);
     mesh.setColorAt(i, tmpColor);
