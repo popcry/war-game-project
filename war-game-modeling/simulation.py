@@ -386,7 +386,7 @@ class Simulation:
             return "RED"
         return None
 
-    def _save_csv(self):
+    def _save_csv(self, quiet: bool = False):
         """버퍼된 CSV 행을 파일로 저장 (simulation.csv + money.csv)"""
         if not self.csv_enabled or not self.csv_rows:
             return
@@ -402,7 +402,8 @@ class Simulation:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(self.csv_rows)
-        print(f"CSV saved: {self.csv_path} ({len(self.csv_rows)} rows)")
+        if not quiet:
+            print(f"CSV saved: {self.csv_path} ({len(self.csv_rows)} rows)")
 
         # money.csv 저장 — 매 tick 팀별 누적 자금 추이
         if self.money_csv_rows:
@@ -414,7 +415,8 @@ class Simulation:
                 writer = csv.DictWriter(f, fieldnames=money_fields)
                 writer.writeheader()
                 writer.writerows(self.money_csv_rows)
-            print(f"Money CSV saved: {self.money_csv_path} ({len(self.money_csv_rows)} rows)")
+            if not quiet:
+                print(f"Money CSV saved: {self.money_csv_path} ({len(self.money_csv_rows)} rows)")
 
     def _get_command_for_team(self, team: Team) -> Command:
         """팀에 대한 명령 반환"""
@@ -426,7 +428,7 @@ class Simulation:
         for unit in self.units:
             unit.clear_targets()  # 이전 탐지 목록 초기화
         for unit in self.units:
-            self.detect.update_detection(unit, self.units)
+            self.detect.update_detection(unit, self.units, self.sim_speed)
             self.fire.update_eligible_targets(unit, self.units)
 
         # 이벤트 스케줄링
@@ -536,7 +538,7 @@ class Simulation:
                 for unit in self.units:
                     unit.clear_targets()  # 이전 탐지 목록 초기화
                 for unit in self.units:
-                    self.detect.update_detection(unit, self.units)
+                    self.detect.update_detection(unit, self.units, self.sim_speed)
                 for team in [Team.RED, Team.BLUE]:
                     self.detect.share_info(team, self.units)
                 for unit in self.units:
@@ -579,6 +581,8 @@ class Simulation:
 
             # CSV 기록 (매 tick 모든 유닛 상태 + 이번 tick의 FIRE 이벤트)
             self._record_tick(current_events)
+            if tick_count % 100 == 0:
+                self._save_csv(quiet=True)
 
             # 조기 종료 검사 — 한 팀의 전투 가능 유닛이 0이 되면 종료
             winner = self._check_termination()

@@ -299,28 +299,28 @@ unit_overrides:
 phases:
   RED:
     phase_1:
-      TAI: [[370, 340]]    # 5x map: BLUE 진영(북) 상공 정찰
+      TAI: [370, 340]    # 5x map: BLUE 진영(북) 상공 정찰
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
       maneuver_objective: [[370, 340]]   # Phase 1부터 북진 (전선 형성 위해)
     phase_2:
-      TAI: [[370, 340]]    # 더 북쪽으로 정찰 깊이 확대
+      TAI: [370, 340]    # 더 북쪽으로 정찰 깊이 확대
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
       maneuver_objective: [[370, 340]]
     phase_3:
-      TAI: [[370, 340]]
+      TAI: [370, 340]
       fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
       maneuver_objective: [[370, 340]]   # BLUE 지휘소(북단)로 진격
   BLUE:
     phase_1:
-      TAI: [[370, 340]]    # 5x map: RED 진영(남) 상공 정찰
+      TAI: [370, 340]    # 5x map: RED 진영(남) 상공 정찰
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
       maneuver_objective: [[1100, 600]]   # Phase 1부터 남진 (전선 형성 위해)
     phase_2:
-      TAI: [[370, 340]]    # 더 남쪽으로
+      TAI: [370, 340]    # 더 남쪽으로
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
       maneuver_objective: [[1100, 600]]
     phase_3:
-      TAI: [[370, 340]]
+      TAI: [370, 340]
       fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
       maneuver_objective: [[1100, 600]]   # RED 지휘소(남단)로 진격
 
