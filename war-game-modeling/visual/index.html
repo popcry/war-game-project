@@ -66,11 +66,15 @@
     .kill-entry .kf-name.blue { color: var(--blue); }
     .kill-entry .kf-name.red  { color: var(--red); }
     .kill-entry .kf-arrow { color: var(--muted); margin: 0 6px; }
-    .kill-entry .kf-verb  { color: var(--muted); margin-right: 4px; font-size: 11px; }
-    .kill-entry.k_kill .kf-verb { color: #ff8a65; }   /* 사망 */
-    .kill-entry.mf_kill .kf-verb,
-    .kill-entry.f_kill  .kf-verb,
-    .kill-entry.m_kill  .kf-verb { color: #ffd66e; }  /* 무력화 */
+    .kill-entry .kf-verb  {
+      color: var(--muted); margin-right: 4px; font-size: 11px;
+      font-weight: 700; letter-spacing: 0.4px;
+    }
+    /* kill 분류별 색 — 한 눈에 심각도 구분 */
+    .kill-entry.k_kill  .kf-verb { color: #ff5b5b; }  /* K-KILL: 완전파괴 (적색) */
+    .kill-entry.mf_kill .kf-verb { color: #ff8a65; }  /* MF-KILL: 둘 다 불가 (주황) */
+    .kill-entry.f_kill  .kf-verb { color: #ffd66e; }  /* F-KILL: 사격불가 (노랑) */
+    .kill-entry.m_kill  .kf-verb { color: #c0e57a; }  /* M-KILL: 이동불가 (연녹) */
     #viewer-label {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       font-size: 32px; font-weight: 700; letter-spacing: 1.5px;

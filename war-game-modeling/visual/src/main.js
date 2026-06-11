@@ -1048,10 +1048,11 @@ let killFeedNextIdx = 0;
 const killFeedActive = [];   // { ev, el }
 
 function _verbForStatus(s) {
-  if (s === 'k_kill')  return 'KILLED';
-  if (s === 'mf_kill') return 'WRECKED';
-  if (s === 'f_kill')  return 'DISARMED';
-  if (s === 'm_kill')  return 'IMMOBILIZED';
+  // NATO 5단계 kill 분류 그대로 표기 (지표·시각화 일관)
+  if (s === 'k_kill')  return 'K-KILL';   // 완전 파괴
+  if (s === 'mf_kill') return 'MF-KILL';  // 이동·사격 모두 불가
+  if (s === 'f_kill')  return 'F-KILL';   // 사격 불가 (이동 가능)
+  if (s === 'm_kill')  return 'M-KILL';   // 이동 불가 (사격 가능)
   return 'HIT';
 }
 
