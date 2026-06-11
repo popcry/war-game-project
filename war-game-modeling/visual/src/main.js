@@ -150,7 +150,7 @@ scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1a1410, 0.55));
 const sun = new THREE.DirectionalLight(0xfff1d6, 1.4);
 sun.position.set(60, 90, 40);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024);
 sun.shadow.camera.near = 10;
 sun.shadow.camera.far = 250;
 sun.shadow.camera.left = -80;
@@ -1263,9 +1263,13 @@ function applyFrame(t) {
 
     if (s.status !== 'k_kill') {
       ag.mesh.visible = true;
+      // Sample terrain height once per agent per frame — the same (x, z) feeds
+      // the mesh, scout ring, command dome, and status ring below, so the
+      // bilinear grid lookup is hoisted here instead of repeated 2–4×.
+      const groundY = sampleHeight(s.x, s.z);
       // CSV y is treated as AGL — ground units use 0, drones store altitude,
       // trench occupants use negative values to sit below the surface.
-      ag.mesh.position.set(s.x, sampleHeight(s.x, s.z) + s.y, s.z);
+      ag.mesh.position.set(s.x, groundY + s.y, s.z);
       ag.mesh.rotation.y = s.yaw;
 
       // Drone reconnaissance: an operational drone scouts the disc of ground
@@ -1277,7 +1281,7 @@ function applyFrame(t) {
         const scouting = detection?.enabled && s.status === 'alive';
         if (scouting) {
           detection.stamp(ag.spec.team, s.x, s.z, DETECTION_RADIUS);
-          ag.scoutRing.position.set(s.x, sampleHeight(s.x, s.z) + 0.12, s.z);
+          ag.scoutRing.position.set(s.x, groundY + 0.12, s.z);
         }
         ag.scoutRing.visible = !!scouting;
       }
@@ -1288,8 +1292,7 @@ function applyFrame(t) {
       if (ag.cpDome) {
         const showing = detection?.enabled && s.status !== 'k_kill';
         if (showing) {
-          const gy = sampleHeight(s.x, s.z);
-          ag.cpDome.position.set(s.x, gy + ag.cpDome.userData.apexY / 2 + 0.12, s.z);
+          ag.cpDome.position.set(s.x, groundY + ag.cpDome.userData.apexY / 2 + 0.12, s.z);
         }
         ag.cpDome.visible = !!showing;
       }
@@ -1337,7 +1340,7 @@ function applyFrame(t) {
 
       // Status ring follows the live unit while it's incapacitated.
       if (vis === 'incapacitated') {
-        ag.ring.position.set(s.x, sampleHeight(s.x, s.z) + STATUS_RING_Y, s.z);
+        ag.ring.position.set(s.x, groundY + STATUS_RING_Y, s.z);
       }
 
       // Stats: track operational and incapacitated separately. Both count

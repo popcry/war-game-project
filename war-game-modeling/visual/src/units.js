@@ -1047,7 +1047,26 @@ export function createUnit(type, team) {
   const factory = FACTORIES[type];
   if (!factory) throw new Error(`unknown unit type: ${type}`);
   const obj = factory(team);
-  obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; } });
+  // Shadow budget: a unit is a Group of 10–30 greeble meshes, and every
+  // shadow-caster is a separate draw call in the sun's shadow pass — at 200+
+  // units that's thousands of extra draws per frame. Cast a shadow from only
+  // the single largest mesh per unit (the hull/body); the contact shadow still
+  // grounds the unit, but the shadow pass shrinks ~15× per unit. receiveShadow
+  // stays off everywhere (units don't need self-shadowing).
+  let biggest = null, biggestVol = -1;
+  const box = new THREE.Box3();
+  const size = new THREE.Vector3();
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = false;
+    o.receiveShadow = false;
+    o.geometry.computeBoundingBox();
+    box.copy(o.geometry.boundingBox);
+    box.getSize(size);
+    const vol = size.x * size.y * size.z;
+    if (vol > biggestVol) { biggestVol = vol; biggest = o; }
+  });
+  if (biggest) biggest.castShadow = true;
   obj.userData.type = type;
   obj.userData.team = team;
   return obj;
