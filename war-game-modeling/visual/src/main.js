@@ -18,6 +18,7 @@ const INCAP_DARKEN     = 0.45; // multiply original material color by this
 const STATUS_RING_Y = 0.7;
 import { unlockAudio, setMuted, isMuted } from './audio.js';
 
+
 const CSV_URL = '../results/simulation.csv';
 const MONEY_URL = '../results/money.csv';
 const CAMERAS_URL = '../results/cameras.json';
@@ -150,7 +151,7 @@ scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1a1410, 0.55));
 const sun = new THREE.DirectionalLight(0xfff1d6, 1.4);
 sun.position.set(60, 90, 40);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024);
 sun.shadow.camera.near = 10;
 sun.shadow.camera.far = 250;
 sun.shadow.camera.left = -80;
@@ -1144,6 +1145,10 @@ function wrapPi(a) {
 const director = new CinematicDirector({
   camera, controls, agentsById, domElement: renderer.domElement,
 });
+// Overhead view to retreat to when a cinematic shot's target agent isn't on
+// the field. Captured here while the camera is still at its initial top view,
+// before any shot has moved it.
+director.setHomePose(camera.position, controls.target);
 const $viewerLabel = document.getElementById('viewer-label');
 
 // Pretty-print an agent ID. "blue_drn_1" → "Blue Drone 1".
@@ -1264,9 +1269,13 @@ function applyFrame(t) {
 
     if (s.status !== 'k_kill') {
       ag.mesh.visible = true;
+      // Sample terrain height once per agent per frame — the same (x, z) feeds
+      // the mesh, scout ring, command dome, and status ring below, so the
+      // bilinear grid lookup is hoisted here instead of repeated 2–4×.
+      const groundY = sampleHeight(s.x, s.z);
       // CSV y is treated as AGL — ground units use 0, drones store altitude,
       // trench occupants use negative values to sit below the surface.
-      ag.mesh.position.set(s.x, sampleHeight(s.x, s.z) + s.y, s.z);
+      ag.mesh.position.set(s.x, groundY + s.y, s.z);
       ag.mesh.rotation.y = s.yaw;
 
       // Drone reconnaissance: an operational drone scouts the disc of ground
@@ -1278,7 +1287,7 @@ function applyFrame(t) {
         const scouting = detection?.enabled && s.status === 'alive';
         if (scouting) {
           detection.stamp(ag.spec.team, s.x, s.z, DETECTION_RADIUS);
-          ag.scoutRing.position.set(s.x, sampleHeight(s.x, s.z) + 0.12, s.z);
+          ag.scoutRing.position.set(s.x, groundY + 0.12, s.z);
         }
         ag.scoutRing.visible = !!scouting;
       }
@@ -1289,8 +1298,7 @@ function applyFrame(t) {
       if (ag.cpDome) {
         const showing = detection?.enabled && s.status !== 'k_kill';
         if (showing) {
-          const gy = sampleHeight(s.x, s.z);
-          ag.cpDome.position.set(s.x, gy + ag.cpDome.userData.apexY / 2 + 0.12, s.z);
+          ag.cpDome.position.set(s.x, groundY + ag.cpDome.userData.apexY / 2 + 0.12, s.z);
         }
         ag.cpDome.visible = !!showing;
       }
@@ -1338,7 +1346,7 @@ function applyFrame(t) {
 
       // Status ring follows the live unit while it's incapacitated.
       if (vis === 'incapacitated') {
-        ag.ring.position.set(s.x, sampleHeight(s.x, s.z) + STATUS_RING_Y, s.z);
+        ag.ring.position.set(s.x, groundY + STATUS_RING_Y, s.z);
       }
 
       // Stats: track operational and incapacitated separately. Both count
@@ -1812,6 +1820,7 @@ const $inspTeam   = document.getElementById('insp-team');
 const $inspId     = document.getElementById('insp-id');
 const $inspStatus = document.getElementById('insp-status');
 const $inspDot    = document.getElementById('insp-dot');
+const $inspView   = document.getElementById('insp-view');
 
 // 5-state NATO kill labels. The dot color still resolves via visualState()
 // so the existing 3-class CSS (operational/incapacitated/destroyed) keeps
@@ -1882,6 +1891,7 @@ function selectAgent(ag) {
   previewCamera.updateProjectionMatrix();
   previewCamera.lookAt(0, 0, 0);
 
+  updateViewButton();
   $inspector.classList.add('visible');
 }
 
@@ -1908,6 +1918,22 @@ function renderInspector(dt) {
 }
 
 $inspClose.addEventListener('click', closeInspector);
+
+// "Switch to this view" — lock the cinematic camera onto the inspected unit.
+// The button reads "active" while the focus is on the currently-shown unit;
+// it clears when the user grabs the camera (director drops manual focus) or
+// focuses a different unit.
+function updateViewButton() {
+  const active = !!selectedAgent && director.manualShot?.agent === selectedAgent.spec.id;
+  $inspView.classList.toggle('active', active);
+}
+$inspView.addEventListener('click', () => {
+  if (!selectedAgent) return;
+  director.focusAgent(selectedAgent.spec.id, { mode: 'follow' });
+  refreshCinemaButton();   // focusing implicitly enables the director
+  updateViewButton();
+});
+director.onManualChange = () => { updateViewButton(); refreshCinemaButton(); };
 
 // Distinguish a click from an orbit drag: only select if the pointer
 // barely moved between press and release.

@@ -129,6 +129,13 @@
     #inspector .dot.operational   { background:#52d273; }
     #inspector .dot.incapacitated { background:#f29e3c; }
     #inspector .dot.destroyed     { background:var(--red); }
+    #inspector .insp-view {
+      width:100%; margin-top:10px; padding:7px 12px;
+      background:#172230; color:var(--text); border:1px solid #2a3a4d;
+      border-radius:8px; cursor:pointer; font-size:13px;
+    }
+    #inspector .insp-view:hover { background:#1e2c3d; }
+    #inspector .insp-view.active { background:var(--accent); color:#1a1300; border-color:transparent; font-weight:600; }
 
 
     #stats .row { display:flex; justify-content:space-between; font-size:12px; padding:2px 0; }
@@ -325,6 +332,7 @@
         <span class="dot" id="insp-dot"></span><span id="insp-status">—</span>
       </span>
     </div>
+    <button class="insp-view" id="insp-view">🎥 Switch to this view</button>
   </div>
 
   <div id="controls">

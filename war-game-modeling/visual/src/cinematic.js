@@ -24,6 +24,11 @@ const TRANSITION_REAL_SECONDS = 1.0;
 
 const smoothstep = u => u * u * (3 - 2 * u);
 
+// Sentinel "shot" used while an agent-targeted shot has no on-field agent this
+// frame — the camera blends to the overhead home view and the label clears.
+// Treated as its own shot identity so we transition into and back out of it.
+const FALLBACK_TOPVIEW = Symbol('fallback-topview');
+
 export class CinematicDirector {
   constructor({ camera, controls, agentsById, domElement }) {
     this.camera = camera;
@@ -38,6 +43,14 @@ export class CinematicDirector {
     this._desiredPos = new THREE.Vector3();
     this._desiredTarget = new THREE.Vector3();
     this.onShotChange = null;
+    // Overhead view the camera retreats to when a shot's agent isn't on the
+    // field (dead, not yet spawned, or an unknown id). Set via setHomePose().
+    this.homePose = null;
+    // User-driven focus (from the inspector's "Switch to this view" button).
+    // When set, it overrides the scheduled shots until the user grabs the
+    // camera or it's cleared. onManualChange(agentId|null) notifies the UI.
+    this.manualShot = null;
+    this.onManualChange = null;
 
     // Capture-phase pointer/wheel handler runs before OrbitControls' bubble
     // handler — so we can flip enabled=true synchronously and let the same
@@ -57,10 +70,34 @@ export class CinematicDirector {
     this.currentShot = null; // re-evaluate on next update
   }
 
+  // Remember the overhead pose to fall back to when a shot's agent is missing.
+  setHomePose(position, target) {
+    this.homePose = { position: position.clone(), target: target.clone() };
+  }
+
+  _computeHome(outPos, outTarget) {
+    if (!this.homePose) return false;
+    outPos.copy(this.homePose.position);
+    outTarget.copy(this.homePose.target);
+    return true;
+  }
+
+  // An agent counts as "on the field this frame" only if it exists and its mesh
+  // is currently visible (applyFrame hides dead / not-yet-spawned units). Shots
+  // without an agent (static / free) are always considered present.
+  _agentPresent(shot) {
+    if (!shot.agent) return true;
+    const agent = this.agentsById.get(shot.agent);
+    return !!(agent && agent.mesh && agent.mesh.visible);
+  }
+
   setEnabled(v) {
     if (this.enabled === v) return;
     this.enabled = v;
     if (!v) {
+      // Handing the camera back (e.g. user grabbed it) also drops any manual
+      // focus so re-enabling cinema resumes the scheduled shots.
+      this._setManual(null);
       this.currentShot = null;
       if (this.onShotChange) this.onShotChange(null);
     } else {
@@ -68,6 +105,22 @@ export class CinematicDirector {
       this.currentShot = null;
       this._transStartReal = null;
     }
+  }
+
+  _setManual(shot) {
+    const prevId = this.manualShot?.agent ?? null;
+    this.manualShot = shot;
+    const nextId = shot?.agent ?? null;
+    if (prevId !== nextId && this.onManualChange) this.onManualChange(nextId);
+  }
+
+  // Lock the camera onto a specific agent, overriding the schedule until the
+  // user grabs the camera. Default 'follow' frames the unit from behind+above.
+  focusAgent(agentId, opts = {}) {
+    this._setManual({ t: 0, mode: opts.mode ?? 'follow', agent: agentId, ...opts });
+    this.enabled = true;
+    this.currentShot = null;        // force a fresh transition into the focus
+    this._transStartReal = null;
   }
 
   findShot(t) {
@@ -81,6 +134,7 @@ export class CinematicDirector {
 
   shouldOverride(t) {
     if (!this.enabled) return false;
+    if (this.manualShot) return this.manualShot.mode !== 'free';
     const s = this.findShot(t);
     return !!(s && s.mode !== 'free');
   }
@@ -136,20 +190,31 @@ export class CinematicDirector {
     this._lastT = t;
     if (!this.enabled) return;
 
-    const shot = this.findShot(t);
+    // A user-driven focus (inspector button) takes precedence over the
+    // scheduled shots until it's cleared.
+    const shot = this.manualShot ?? this.findShot(t);
     if (!shot) return;
 
-    if (shot !== this.currentShot) {
+    // When an agent-targeted shot has no on-field agent this frame, swap to the
+    // overhead home view and clear the label. Use a sentinel shot identity so
+    // the transition (and label state) flips cleanly in and back out.
+    const present = this._agentPresent(shot);
+    const activeShot = present ? shot : FALLBACK_TOPVIEW;
+
+    if (activeShot !== this.currentShot) {
       this._fromPos.copy(this.camera.position);
       this._fromTarget.copy(this.controls.target);
       this._transStartReal = performance.now() / 1000;
-      this.currentShot = shot;
-      if (this.onShotChange) this.onShotChange(shot);
+      this.currentShot = activeShot;
+      if (this.onShotChange) this.onShotChange(present ? shot : null);
     }
 
     if (shot.mode === 'free') return;
 
-    if (!this._computeDesired(shot, t, this._desiredPos, this._desiredTarget)) return;
+    const ok = present
+      ? this._computeDesired(shot, t, this._desiredPos, this._desiredTarget)
+      : this._computeHome(this._desiredPos, this._desiredTarget);
+    if (!ok) return;
 
     const elapsed = performance.now() / 1000 - (this._transStartReal ?? performance.now() / 1000);
     const u = Math.min(1, elapsed / TRANSITION_REAL_SECONDS);
