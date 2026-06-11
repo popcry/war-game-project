@@ -51,8 +51,9 @@ const GRASS_COLOR        = 0x7ab83a; // base green; per-instance brightness is j
 // two InstancedMeshes — many flat sand-patch domes and fewer faceted pebbles
 // with per-instance gray jitter — so the cell reads as a dusty/gravelly patch
 // instead of a flat color. Same UV→world placement as the grass.
-const OPEN_SAND_COUNT   = 2000;      // flat sand-patch instances
-const OPEN_PEBBLE_COUNT = 600;       // pebble/gravel instances
+// open-field 장식 — 크기 줄여서 urban building과 시각 혼동 해소
+const OPEN_SAND_COUNT   = 1500;      // 2000 → 1500
+const OPEN_PEBBLE_COUNT = 300;       // 600 → 300 (절반)
 const OPEN_SAND_COLOR   = 0xd9c08a;  // light tan; pebble color is jittered per-instance
 
 // Water: where the overlay PNG is water (the generator paints terrain_type
@@ -77,7 +78,7 @@ const WATER_RIPPLE_WAVES  = 0.6;      // ripple spatial frequency (per world-m)
 const URBAN_CELL_FILL_RATIO  = 0.85;   // 건물 footprint = 셀 크기 × 이 비율 (셀 안에 머묾)
 const URBAN_BUILDING_HEIGHT_MIN  = 0.25; // 최소 높이 (단층 건물)
 const URBAN_BUILDING_HEIGHT_MAX  = 0.85; // 최대 높이 (중층/고층 빌딩)
-const URBAN_BUILDING_COLOR   = 0x9a9a9a; // 콘크리트 회색 (per-instance shade로 변주)
+const URBAN_BUILDING_COLOR   = 0x5a5a5a; // 어두운 콘크리트 회색 — grass/forest와 시각 구분 명확
 
 // Ground plane covers the existing scenario world (±60 m). Both PNGs share the
 // same 613×636 pixel grid (one pixel = one 50 m AOI cell), and both have PNG
@@ -523,7 +524,8 @@ function buildOpenFieldDebris(colorImage, sampleHeightFn) {
   group.add(sand);
 
   // --- Pebbles: faceted icosahedrons, varied scale + per-instance shade ----
-  const pebbleGeo = new THREE.IcosahedronGeometry(0.22, 0);
+  // 0.22 → 0.10 — 작게 줄여서 urban building과 시각 혼동 줄임 (55m → 25m sim)
+  const pebbleGeo = new THREE.IcosahedronGeometry(0.10, 0);
   const pebbleMat = new THREE.MeshStandardMaterial({
     color: 0xffffff, roughness: 0.9, metalness: 0,
   });
@@ -796,23 +798,36 @@ loadingEl.remove();
 // lowest sample sits at 0 — `sampleHeight + y` then renders ground units near
 // the terrain surface and drones at proportional AGL.
 {
-  const FIT_EXTENT = 100;
-  const { minX, maxX, minZ, maxZ } = scenario.bounds;
+  // 유닛 좌표 변환을 시뮬 맵 전체(=마스크/지형 텍스처가 커버하는 영역)에 맞춤.
+  // 이전: scenario.bounds 기준 → 유닛이 차지한 영역만 -50~+50으로 스케일
+  // 이후: 시뮬 맵 전체 30km×21.875km를 PLANE_SIZE(120) 안에 맞춤
+  //  → 마스크/배경/건물 메쉬와 정확히 같은 좌표계 → 시각 어긋남 0
+  const SIM_MAP_WIDTH_M  = 1200 * 25;  // simulation.map_width_px × pixel_to_meter_scale
+  const SIM_MAP_HEIGHT_M = 875 * 25;
+  const cx = SIM_MAP_WIDTH_M / 2;
+  const cz = SIM_MAP_HEIGHT_M / 2;
+  // PlaneGeometry는 정사각(PLANE_SIZE×PLANE_SIZE)이고 텍스처가 그 안에 stretch됨.
+  // X와 Z 비율이 달라(30km vs 21.875km) 축별로 다른 scale 적용해야 텍스처와 정확히 일치.
+  const scaleX = PLANE_SIZE / SIM_MAP_WIDTH_M;
+  const scaleZ = PLANE_SIZE / SIM_MAP_HEIGHT_M;
+  const scaleY = scaleX;  // elevation은 X 스케일과 동일 (sampleHeight 결과와 맞춤)
   let minY = Infinity;
   for (const a of scenario.agents) for (const k of a.track) if (k.y < minY) minY = k.y;
-  const cx = (minX + maxX) / 2;
-  const cz = (minZ + maxZ) / 2;
-  const scale = FIT_EXTENT / Math.max(maxX - minX, maxZ - minZ);
   for (const a of scenario.agents) {
     for (const k of a.track) {
-      k.x = (k.x - cx) * scale;
-      k.z = (k.z - cz) * scale;
-      k.y = (k.y - minY) * scale;
+      k.x = (k.x - cx) * scaleX;
+      // Z flip — sim z (PNG row, +y=south) → world z (+z=북) 으로 부호 반전
+      // 지형 텍스처는 UV(v=0)이 world +z(북)으로 매핑되는데 유닛 z는 그대로 두면 반대 방향
+      k.z = (cz - k.z) * scaleZ;
+      k.y = (k.y - minY) * scaleY;
+      // yaw도 함께 flip해서 이동 방향과 mesh 회전 일치
+      k.yaw = -k.yaw;
     }
   }
+  const { minX, maxX, minZ, maxZ } = scenario.bounds;
   scenario.bounds = {
-    minX: (minX - cx) * scale, maxX: (maxX - cx) * scale,
-    minZ: (minZ - cz) * scale, maxZ: (maxZ - cz) * scale,
+    minX: (minX - cx) * scaleX, maxX: (maxX - cx) * scaleX,
+    minZ: (cz - maxZ) * scaleZ, maxZ: (cz - minZ) * scaleZ,
   };
 }
 
