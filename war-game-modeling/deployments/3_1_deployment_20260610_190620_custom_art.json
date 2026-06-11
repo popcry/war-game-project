@@ -326,38 +326,6 @@
       "quantity": 9
     },
     {
-      "id": "RU-AT-01",
-      "team": "RED",
-      "unitType": "ANTI_TANK",
-      "x": 947,
-      "y": 625,
-      "quantity": 2
-    },
-    {
-      "id": "RU-AT-02",
-      "team": "RED",
-      "unitType": "ANTI_TANK",
-      "x": 940,
-      "y": 471,
-      "quantity": 2
-    },
-    {
-      "id": "RU-AT-03",
-      "team": "RED",
-      "unitType": "ANTI_TANK",
-      "x": 990,
-      "y": 726,
-      "quantity": 2
-    },
-    {
-      "id": "RU-AT-04",
-      "team": "RED",
-      "unitType": "ANTI_TANK",
-      "x": 994,
-      "y": 534,
-      "quantity": 2
-    },
-    {
       "id": "RU-CP-01",
       "team": "RED",
       "unitType": "COMMAND_POST",
@@ -539,7 +507,7 @@
       "unitType": "ARTILLERY",
       "x": 77,
       "y": 304,
-      "quantity": 1
+      "quantity": 6
     },
     {
       "id": "UA-ART-02",
@@ -547,7 +515,7 @@
       "unitType": "ARTILLERY",
       "x": 47,
       "y": 253,
-      "quantity": 1
+      "quantity": 6
     },
     {
       "id": "UA-ART-03",
@@ -555,7 +523,7 @@
       "unitType": "ARTILLERY",
       "x": 30,
       "y": 446,
-      "quantity": 1
+      "quantity": 6
     },
     {
       "id": "UA-CP-01",
@@ -566,12 +534,12 @@
       "quantity": 1
     },
     {
-      "id": "placement_1781157209427",
+      "id": "RU-ART-01",
       "team": "RED",
       "unitType": "ARTILLERY",
       "x": 1160,
       "y": 498,
-      "quantity": 1
+      "quantity": 6
     }
   ],
   "trenches": []
