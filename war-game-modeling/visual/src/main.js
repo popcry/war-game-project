@@ -18,6 +18,7 @@ const INCAP_DARKEN     = 0.45; // multiply original material color by this
 const STATUS_RING_Y = 0.7;
 import { unlockAudio, setMuted, isMuted } from './audio.js';
 
+
 const CSV_URL = '../results/simulation.csv';
 const MONEY_URL = '../results/money.csv';
 const CAMERAS_URL = '../results/cameras.json';
