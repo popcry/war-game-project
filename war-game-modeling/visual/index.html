@@ -127,7 +127,9 @@
     #inspector .dot.destroyed     { background:var(--red); }
     #inspector .insp-view {
       width:100%; margin-top:10px; padding:7px 12px;
-      background:#172230; color:var(--text); border:1px solid #2a3a4d;
+      /* The inspector panel is light-themed (--text is dark here), but this
+         button keeps a dark navy fill, so its label must be explicitly white. */
+      background:#172230; color:#fff; border:1px solid #2a3a4d;
       border-radius:8px; cursor:pointer; font-size:13px;
     }
     #inspector .insp-view:hover { background:#1e2c3d; }
