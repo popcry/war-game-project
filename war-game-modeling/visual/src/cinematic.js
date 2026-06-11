@@ -46,6 +46,11 @@ export class CinematicDirector {
     // Overhead view the camera retreats to when a shot's agent isn't on the
     // field (dead, not yet spawned, or an unknown id). Set via setHomePose().
     this.homePose = null;
+    // User-driven focus (from the inspector's "Switch to this view" button).
+    // When set, it overrides the scheduled shots until the user grabs the
+    // camera or it's cleared. onManualChange(agentId|null) notifies the UI.
+    this.manualShot = null;
+    this.onManualChange = null;
 
     // Capture-phase pointer/wheel handler runs before OrbitControls' bubble
     // handler — so we can flip enabled=true synchronously and let the same
@@ -90,6 +95,9 @@ export class CinematicDirector {
     if (this.enabled === v) return;
     this.enabled = v;
     if (!v) {
+      // Handing the camera back (e.g. user grabbed it) also drops any manual
+      // focus so re-enabling cinema resumes the scheduled shots.
+      this._setManual(null);
       this.currentShot = null;
       if (this.onShotChange) this.onShotChange(null);
     } else {
@@ -97,6 +105,22 @@ export class CinematicDirector {
       this.currentShot = null;
       this._transStartReal = null;
     }
+  }
+
+  _setManual(shot) {
+    const prevId = this.manualShot?.agent ?? null;
+    this.manualShot = shot;
+    const nextId = shot?.agent ?? null;
+    if (prevId !== nextId && this.onManualChange) this.onManualChange(nextId);
+  }
+
+  // Lock the camera onto a specific agent, overriding the schedule until the
+  // user grabs the camera. Default 'follow' frames the unit from behind+above.
+  focusAgent(agentId, opts = {}) {
+    this._setManual({ t: 0, mode: opts.mode ?? 'follow', agent: agentId, ...opts });
+    this.enabled = true;
+    this.currentShot = null;        // force a fresh transition into the focus
+    this._transStartReal = null;
   }
 
   findShot(t) {
@@ -110,6 +134,7 @@ export class CinematicDirector {
 
   shouldOverride(t) {
     if (!this.enabled) return false;
+    if (this.manualShot) return this.manualShot.mode !== 'free';
     const s = this.findShot(t);
     return !!(s && s.mode !== 'free');
   }
@@ -165,7 +190,9 @@ export class CinematicDirector {
     this._lastT = t;
     if (!this.enabled) return;
 
-    const shot = this.findShot(t);
+    // A user-driven focus (inspector button) takes precedence over the
+    // scheduled shots until it's cleared.
+    const shot = this.manualShot ?? this.findShot(t);
     if (!shot) return;
 
     // When an agent-targeted shot has no on-field agent this frame, swap to the

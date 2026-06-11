@@ -1819,6 +1819,7 @@ const $inspTeam   = document.getElementById('insp-team');
 const $inspId     = document.getElementById('insp-id');
 const $inspStatus = document.getElementById('insp-status');
 const $inspDot    = document.getElementById('insp-dot');
+const $inspView   = document.getElementById('insp-view');
 
 // 5-state NATO kill labels. The dot color still resolves via visualState()
 // so the existing 3-class CSS (operational/incapacitated/destroyed) keeps
@@ -1889,6 +1890,7 @@ function selectAgent(ag) {
   previewCamera.updateProjectionMatrix();
   previewCamera.lookAt(0, 0, 0);
 
+  updateViewButton();
   $inspector.classList.add('visible');
 }
 
@@ -1915,6 +1917,22 @@ function renderInspector(dt) {
 }
 
 $inspClose.addEventListener('click', closeInspector);
+
+// "Switch to this view" — lock the cinematic camera onto the inspected unit.
+// The button reads "active" while the focus is on the currently-shown unit;
+// it clears when the user grabs the camera (director drops manual focus) or
+// focuses a different unit.
+function updateViewButton() {
+  const active = !!selectedAgent && director.manualShot?.agent === selectedAgent.spec.id;
+  $inspView.classList.toggle('active', active);
+}
+$inspView.addEventListener('click', () => {
+  if (!selectedAgent) return;
+  director.focusAgent(selectedAgent.spec.id, { mode: 'follow' });
+  refreshCinemaButton();   // focusing implicitly enables the director
+  updateViewButton();
+});
+director.onManualChange = () => { updateViewButton(); refreshCinemaButton(); };
 
 // Distinguish a click from an orbit drag: only select if the pointer
 // barely moved between press and release.
