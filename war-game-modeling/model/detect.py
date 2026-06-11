@@ -103,6 +103,24 @@ TARGET_SIZE_CORRECTION = {
 CONCEALED_TERRAINS = {"trench", "forest", "urban"}
 
 
+# 팀별 유닛 타입별 오버라이드 — OBSERVER_PROFILES 기본값을 팀 단위로 덮어씀
+# 예: BLUE CP만 30km/50km 광역 탐지(통합 ISR 본부 개념)
+TEAM_OBSERVER_OVERRIDES = {
+    "BLUE": {
+        UnitType.COMMAND_POST: {"equipment_range_m": 50000.0},
+    },
+}
+
+
+def _get_profile(observer):
+    """팀 오버라이드를 적용한 OBSERVER_PROFILE 반환."""
+    base = OBSERVER_PROFILES[observer.unit_type]
+    override = TEAM_OBSERVER_OVERRIDES.get(observer.team.value, {}).get(observer.unit_type)
+    if override is None:
+        return base
+    return {**base, **override}
+
+
 class Detect:
     def __init__(self):
         self.terrain = Terrain()
@@ -185,7 +203,7 @@ class Detect:
         return 0.70
 
     def calculate_glimpse_probability(self, observer: Unit, target: Unit) -> float:
-        profile = OBSERVER_PROFILES[observer.unit_type]
+        profile = _get_profile(observer)
         distance_m = calculate_distance(observer, target) * PIXEL_TO_METER_SCALE
         base_probability, max_range_m = self._glimpse_mode(profile, distance_m)
         if base_probability <= 0.0:
@@ -208,7 +226,7 @@ class Detect:
         """Detect a target using glimpse probability and interval-scaled attempts."""
         if target.status not in FUNCTIONAL_STATUSES:
             return False
-        profile = OBSERVER_PROFILES[observer.unit_type]
+        profile = _get_profile(observer)
         distance_m = calculate_distance(observer, target) * PIXEL_TO_METER_SCALE
         if distance_m > profile["equipment_range_m"]:
             return False

@@ -181,6 +181,11 @@ class Simulation:
         # 초기 유닛 로드
         self._load_initial_units()
 
+        # 지휘소(CP) 위치를 지형 장애물로 등록 — 다른 유닛이 통과 못 함, BFS도 우회
+        for unit in self.units:
+            if unit.unit_type == UnitType.COMMAND_POST:
+                self.terrain.add_obstacle(unit.position, radius=2)  # ±2 셀 = 50m
+
         # agent_id 매핑 생성 (예: "blue_drn_1")
         self._build_agent_id_map()
 

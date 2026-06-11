@@ -250,16 +250,39 @@ class Terrain:
         """언덕·산악 셀 여부 — DEM elevation이 mountain_threshold를 넘으면 True."""
         return self.get_elevation(position) >= self.MOUNTAIN_THRESHOLD
 
+    def add_obstacle(self, position: Tuple[float, float], radius: int = 1) -> None:
+        """동적 장애물 등록 (예: 지휘소). 거리장 캐시 무효화."""
+        if not hasattr(self, 'obstacle_mask') or self.obstacle_mask is None:
+            H, W = self.dem_data.shape
+            self.obstacle_mask = np.zeros((H, W), dtype=bool)
+        x, y = int(position[0]), int(position[1])
+        H, W = self.obstacle_mask.shape
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < W and 0 <= ny < H:
+                    self.obstacle_mask[ny, nx] = True
+        # 장애물 추가 시 거리장 무효화 — 다음 호출 때 재계산
+        if hasattr(self, '_dist_cache'):
+            self._dist_cache.clear()
+
     def is_passable(self, position: Tuple[float, float], unit_type) -> bool:
         """지상 유닛 통행 가능 여부.
         - 드론/자폭드론: 항상 통과 (비행)
         - 교량 위: 모든 지상 유닛 통과 (강 차단 무시)
         - 보병(RIFLE), 대전차(ANTI_TANK): 강 통과 가능 (도하), 건물·언덕은 차단
         - 그 외 지상(전차·포병 등): 강·건물·언덕 모두 차단
+        - 동적 장애물(지휘소 등): 모든 지상 유닛 차단
         """
         from model.unit import UnitType
         if unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
             return True
+        # 동적 장애물 (CP 등) — 다른 차단 검사보다 먼저
+        if hasattr(self, 'obstacle_mask') and self.obstacle_mask is not None:
+            x_int, y_int = int(position[0]), int(position[1])
+            if 0 <= y_int < self.obstacle_mask.shape[0] and 0 <= x_int < self.obstacle_mask.shape[1]:
+                if self.obstacle_mask[y_int, x_int]:
+                    return False
         # 교량은 다른 차단보다 우선 — 강 위에 놓여도 통행 허용
         if self.is_bridge(position):
             return True
@@ -381,6 +404,9 @@ class Terrain:
         passable = np.ones((H, W), dtype=bool)
         if self.urban_mask is not None:
             passable &= ~self.urban_mask
+        # 동적 장애물 (지휘소 등) 차단
+        if hasattr(self, 'obstacle_mask') and self.obstacle_mask is not None:
+            passable &= ~self.obstacle_mask
         if hasattr(self, 'MOUNTAIN_THRESHOLD') and self.MOUNTAIN_THRESHOLD is not None:
             # MOUNTAIN_THRESHOLD는 elevation의 "scaled" 단위 (m / PIXEL_TO_METER_SCALE)
             # dem_data는 raw meters. 비교 위해 dem / scale 사용해 동일 단위

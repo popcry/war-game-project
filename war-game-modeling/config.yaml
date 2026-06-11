@@ -75,17 +75,17 @@ probabilities:
   damage_logics:
     columns: ["Side", "Attacker", "Target", "Target_Status", "Max_range", "Min_range", "100m Ph", "500m Ph", "1,500m Ph", "2,500m Ph", "Pk/h", "RL"]
     rows:
-      - ["Red", "TANK", "TANK", "Open", 3000, "-", 0.70, 0.60, 0.35, 0.15, 0.70, null]
-      - ["Red", "TANK", "TANK", "Defilade", 3000, "-", 0.18, 0.09, 0.05, 0.02, 0.70, null]
-      - ["Red", "TANK", "RIFLE", "Stand", 3000, "-", 0.95, 0.90, 0.80, 0.60, 1.00, null]
-      - ["Red", "TANK", "RIFLE", "Prone", 3000, "-", 0.40, 0.32, 0.07, 0.00, 0.40, null]
-      - ["Red", "TANK", "RIFLE", "Trench", 3000, "-", 0.12, 0.07, 0.01, 0.00, 0.40, null]
-      - ["Red", "TANK", "COMMAND_POST", "All", 3000, "-", 0.12, 0.09, 0.05, 0.02, 0.20, null]
-      - ["Red", "ARTILLERY", "TANK", "All", 65000, 24700, "Carlton", "Carlton", "Carlton", "Carlton", 0.30, "SQRT(A/pi)"]
-      - ["Red", "ARTILLERY", "RIFLE", "Stand", 65000, 24700, "Carlton", "Carlton", "Carlton", "Carlton", 0.70, "SQRT(A/pi)"]
-      - ["Red", "ARTILLERY", "RIFLE", "Prone", 65000, 24700, "Carlton", "Carlton", "Carlton", "Carlton", 0.45, "SQRT(A/pi)"]
-      - ["Red", "ARTILLERY", "RIFLE", "Trench", 65000, 24700, "Carlton", "Carlton", "Carlton", "Carlton", 0.25, "SQRT(A/pi)"]
-      - ["Red", "ARTILLERY", "COMMAND_POST", "All", 65000, 24700, "Carlton", "Carlton", "Carlton", "Carlton", 0.50, "SQRT(A/pi)"]
+      - ["Red", "TANK", "TANK", "Open", 3000, "-", 0.35, 0.30, 0.18, 0.08, 0.35, null]
+      - ["Red", "TANK", "TANK", "Defilade", 3000, "-", 0.09, 0.05, 0.03, 0.01, 0.35, null]
+      - ["Red", "TANK", "RIFLE", "Stand", 3000, "-", 0.48, 0.45, 0.40, 0.30, 0.50, null]
+      - ["Red", "TANK", "RIFLE", "Prone", 3000, "-", 0.20, 0.16, 0.04, 0.00, 0.20, null]
+      - ["Red", "TANK", "RIFLE", "Trench", 3000, "-", 0.06, 0.04, 0.01, 0.00, 0.20, null]
+      - ["Red", "TANK", "COMMAND_POST", "All", 3000, "-", 0.06, 0.05, 0.03, 0.01, 0.10, null]
+      - ["Red", "ARTILLERY", "TANK", "All", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.30, "SQRT(A/pi)"]
+      - ["Red", "ARTILLERY", "RIFLE", "Stand", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.70, "SQRT(A/pi)"]
+      - ["Red", "ARTILLERY", "RIFLE", "Prone", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.45, "SQRT(A/pi)"]
+      - ["Red", "ARTILLERY", "RIFLE", "Trench", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.25, "SQRT(A/pi)"]
+      - ["Red", "ARTILLERY", "COMMAND_POST", "All", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.50, "SQRT(A/pi)"]
       - ["Red", "RIFLE", "RIFLE", "Stand", 500, "-", 0.55, 0.45, 0.00, 0.00, 0.40, null]
       - ["Red", "RIFLE", "RIFLE", "Prone", 500, "-", 0.40, 0.32, 0.00, 0.00, 0.40, null]
       - ["Red", "RIFLE", "RIFLE", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
@@ -94,7 +94,7 @@ probabilities:
       - ["Red",  "RIFLE", "ANTI_TANK", "Stand",  500, "-", 0.55, 0.45, 0.00, 0.00, 0.40, null]
       - ["Red",  "RIFLE", "ANTI_TANK", "Prone",  500, "-", 0.40, 0.32, 0.00, 0.00, 0.40, null]
       - ["Red",  "RIFLE", "ANTI_TANK", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
-      - ["Red", "ANTI_TANK", "TANK", "All", 2500, 75, 0.98, 0.95, 0.94, 0.92, 0.90, null]
+      - ["Red", "ANTI_TANK", "TANK", "All", 2500, 75, 1.00, 1.00, 1.00, 1.00, 1.00, null]
       - ["Red", "SELF_DEST_DRONE", "TANK", "All", 40000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
       - ["Red", "SELF_DEST_DRONE", "RIFLE", "All", 40000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
       - ["Blue", "TANK", "TANK", "Open", 3000, "-", 0.70, 0.60, 0.35, 0.15, 0.70, null]
@@ -103,11 +103,11 @@ probabilities:
       - ["Blue", "TANK", "RIFLE", "Prone", 3000, "-", 0.40, 0.32, 0.07, 0.00, 0.40, null]
       - ["Blue", "TANK", "RIFLE", "Trench", 3000, "-", 0.12, 0.07, 0.01, 0.00, 0.40, null]
       - ["Blue", "TANK", "COMMAND_POST", "All", 3000, "-", 0.12, 0.09, 0.05, 0.02, 0.20, null]
-      - ["Blue", "ARTILLERY", "TANK", "All", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.30, "SQRT(A/pi)"]
-      - ["Blue", "ARTILLERY", "RIFLE", "Stand", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.70, "SQRT(A/pi)"]
-      - ["Blue", "ARTILLERY", "RIFLE", "Prone", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.45, "SQRT(A/pi)"]
-      - ["Blue", "ARTILLERY", "RIFLE", "Trench", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.25, "SQRT(A/pi)"]
-      - ["Blue", "ARTILLERY", "COMMAND_POST", "All", 22000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.50, "SQRT(A/pi)"]
+      - ["Blue", "ARTILLERY", "TANK", "All", 35000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.30, "SQRT(A/pi)"]
+      - ["Blue", "ARTILLERY", "RIFLE", "Stand", 35000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.70, "SQRT(A/pi)"]
+      - ["Blue", "ARTILLERY", "RIFLE", "Prone", 35000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.45, "SQRT(A/pi)"]
+      - ["Blue", "ARTILLERY", "RIFLE", "Trench", 35000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.25, "SQRT(A/pi)"]
+      - ["Blue", "ARTILLERY", "COMMAND_POST", "All", 35000, 3000, "Carlton", "Carlton", "Carlton", "Carlton", 0.50, "SQRT(A/pi)"]
       - ["Blue", "RIFLE", "RIFLE", "Stand", 500, "-", 0.55, 0.45, 0.00, 0.00, 0.40, null]
       - ["Blue", "RIFLE", "RIFLE", "Prone", 500, "-", 0.40, 0.32, 0.00, 0.00, 0.40, null]
       - ["Blue", "RIFLE", "RIFLE", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
@@ -116,7 +116,7 @@ probabilities:
       - ["Blue", "RIFLE", "ANTI_TANK", "Stand",  500, "-", 0.55, 0.45, 0.00, 0.00, 0.40, null]
       - ["Blue", "RIFLE", "ANTI_TANK", "Prone",  500, "-", 0.40, 0.32, 0.00, 0.00, 0.40, null]
       - ["Blue", "RIFLE", "ANTI_TANK", "Trench", 500, "-", 0.12, 0.07, 0.00, 0.00, 0.40, null]
-      - ["Blue", "ANTI_TANK", "TANK", "All", 2500, 75, 0.98, 0.95, 0.94, 0.92, 0.90, null]
+      - ["Blue", "ANTI_TANK", "TANK", "All", 2500, 75, 1.00, 1.00, 1.00, 1.00, 1.00, null]
       - ["Blue", "SELF_DEST_DRONE", "TANK", "All", 5000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
       - ["Blue", "SELF_DEST_DRONE", "RIFLE", "All", 5000, "-", 0.90, 0.90, 0.85, 0.80, 0.85, "5m"]
 
@@ -185,13 +185,13 @@ units:
     detectability: 0.8
     weapon_range_m: 3000
     speed_kmh: 5
-    fire_interval: [60.0, 180.0, 100.0]
+    fire_interval: [30.0, 90.0, 60.0]   # 분당 1발 (triangular, 평균 60초)
   TANK:
     detect_range_m: 3000
     detectability: 2.0
     weapon_range_m: 3000
     speed_kmh: 10
-    fire_interval: [5.0, 10.0, 6.0]
+    fire_interval: [30.0, 90.0, 60.0]   # 분당 1발 (triangular, 평균 60초)
   ARTILLERY:
     detect_range_m: 1000
     detectability: 2.0
@@ -284,14 +284,14 @@ platform_overrides:
 unit_overrides:
   RED:
     ARTILLERY:
-      weapon_range_m: 65000
+      weapon_range_m: 22000   # 65000 → 22000 (BLUE와 동일)
     ANTI_TANK:
       weapon_range_m: 2500
     SELF_DEST_DRONE:
       weapon_range_m: 40000
   BLUE:
     ARTILLERY:
-      weapon_range_m: 22000
+      weapon_range_m: 35000   # 방어자 장사거리 우위 (RED 22km)
     ANTI_TANK:
       weapon_range_m: 2500
     SELF_DEST_DRONE:
