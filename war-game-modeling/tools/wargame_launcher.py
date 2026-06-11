@@ -515,7 +515,7 @@ INDEX_HTML = r"""<!doctype html>
         <label class="field">Sim speed
           <input id="simSpeed" type="number" min="0.1" step="0.1" value="1.0">
         </label>
-        <label class="field">Max time
+        <label class="field">Max time (ticks ≈ 분)
           <input id="maxTime" type="number" min="1" step="1" value="120">
         </label>
         <label class="field">Log tail
@@ -729,7 +729,7 @@ INDEX_HTML = r"""<!doctype html>
       if (name === "fast") {
         ids.timeScale.value = "5.0";
         ids.simSpeed.value = "1.0";
-        ids.maxTime.value = "600";
+        ids.maxTime.value = "120";   // 1 tick = 1 분 → 120 tick = 2시간
         ids.detection.checked = true;
         ids.eligible.checked = true;
         ids.fire.checked = true;
@@ -740,7 +740,7 @@ INDEX_HTML = r"""<!doctype html>
       if (name === "visual") {
         ids.timeScale.value = "2.0";
         ids.simSpeed.value = "1.0";
-        ids.maxTime.value = "300";
+        ids.maxTime.value = "60";    // 1 tick = 1 분 → 60 tick = 1시간 (빨리 보기)
         ids.detection.checked = true;
         ids.eligible.checked = true;
         ids.fire.checked = true;
@@ -751,7 +751,7 @@ INDEX_HTML = r"""<!doctype html>
       if (name === "video") {
         ids.timeScale.value = "5.0";
         ids.simSpeed.value = "1.0";
-        ids.maxTime.value = "600";
+        ids.maxTime.value = "120";   // 1 tick = 1 분 → 120 tick = 2시간 영상
         ids.detection.checked = false;
         ids.eligible.checked = false;
         ids.fire.checked = true;

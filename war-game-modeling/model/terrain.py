@@ -230,18 +230,44 @@ class Terrain:
         return self.get_elevation(position) >= self.MOUNTAIN_THRESHOLD
 
     def is_passable(self, position: Tuple[float, float], unit_type) -> bool:
-        """지상 유닛 통행 가능 여부. 강·건물·언덕은 막힘. 드론은 항상 True (비행)."""
-        # 드론과 자폭드론은 비행하므로 모두 통과
+        """지상 유닛 통행 가능 여부.
+        - 드론/자폭드론: 항상 통과 (비행)
+        - 보병(RIFLE), 대전차(ANTI_TANK): 강 통과 가능 (도하), 건물·언덕은 차단
+        - 그 외 지상(전차·포병 등): 강·건물·언덕 모두 차단
+        """
         from model.unit import UnitType
         if unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
             return True
-        # 지상 유닛: 강·건물·언덕 차단
-        if self.is_river(position):
-            return False
         if self.is_urban(position):
             return False
         if self.is_mountain(position):
             return False
+        if self.is_river(position):
+            return unit_type in (UnitType.RIFLE, UnitType.ANTI_TANK)
+        return True
+
+    def is_passable_path(self, from_pos: Tuple[float, float], to_pos: Tuple[float, float], unit_type) -> bool:
+        """from_pos → to_pos 직선 경로상 모든 셀이 통행 가능한가.
+
+        단순 destination 검사는 step이 크면 1px 짜리 강·1셀 건물을 건너뛰는 문제 발생.
+        경로를 1px 간격으로 샘플링해서 막힌 셀을 만나면 False 반환.
+        드론/자폭드론은 비행이므로 항상 True.
+        """
+        from model.unit import UnitType
+        if unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
+            return True
+        fx, fy = from_pos
+        tx, ty = to_pos
+        dist = ((tx - fx) ** 2 + (ty - fy) ** 2) ** 0.5
+        if dist < 1e-9:
+            return self.is_passable(to_pos, unit_type)
+        steps = max(1, int(dist) + 1)   # 1px 이하 간격으로 샘플
+        for i in range(1, steps + 1):    # 시작 셀은 건너뜀(이미 거기 있음)
+            t = i / steps
+            x = fx + (tx - fx) * t
+            y = fy + (ty - fy) * t
+            if not self.is_passable((x, y), unit_type):
+                return False
         return True
 
     def get_road_type(self, position: Tuple[float, float]) -> str:
@@ -294,4 +320,7 @@ class Terrain:
             return 1.0
 
         terrain_type = self.get_terrain_type(position)
+        # 보병·대전차가 강을 도하할 때는 mobility.river(0)이 아닌 별도 도하 속도 적용
+        if terrain_type == "river" and unit.unit_type in (UnitType.RIFLE, UnitType.ANTI_TANK):
+            return float(self.terrain_decay_rates.get("river_infantry", 0.2))
         return float(self.terrain_decay_rates.get(terrain_type, 1.0))

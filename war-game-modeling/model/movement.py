@@ -65,6 +65,39 @@ class Movement:
             return 0
         return unit.id % len(self.DRONE_PATTERN)
 
+    # 차단 시 우회: 좁은 각부터 넓은 각까지, 양쪽으로 — 벽을 따라 옆으로 미끄러지듯 전진
+    _BYPASS_ANGLES = [math.radians(a) for a in
+                      (30, -30, 45, -45, 60, -60, 90, -90, 120, -120, 150, -150)]
+    # 우회 실패 시 보폭을 줄여 좁은 틈으로 들어가도록 재시도
+    _STEP_FRACTIONS = [1.0, 0.5, 0.25]
+
+    def _try_passable_step(self, unit: Unit, dx: float, dy: float, speed: float, time_step: float):
+        """(dx,dy) 정규화 방향에서 직진/우회를 시도.
+        - 직진 → ±30/45/60/90/120/150° 회전 순으로 검사
+        - 각도가 모두 막히면 보폭을 1.0/0.5/0.25배로 줄여 재시도 (좁은 틈 통과)
+        반환: (next_x, next_y) 또는 None (모두 막힘).
+        """
+        cur = unit.position
+        full_step = speed * time_step
+
+        # 1) 직진 (full step 우선)
+        for frac in self._STEP_FRACTIONS:
+            step = full_step * frac
+            nx = cur[0] + dx * step
+            ny = cur[1] + dy * step
+            if self.terrain.is_passable_path(cur, (nx, ny), unit.unit_type):
+                return (nx, ny)
+            # 2) 우회 (±30 ~ ±150)
+            for a in self._BYPASS_ANGLES:
+                ca, sa = math.cos(a), math.sin(a)
+                rdx = dx * ca - dy * sa
+                rdy = dx * sa + dy * ca
+                nx = cur[0] + rdx * step
+                ny = cur[1] + rdy * step
+                if self.terrain.is_passable_path(cur, (nx, ny), unit.unit_type):
+                    return (nx, ny)
+        return None
+
     def calculate_drone_orbit_objective(self, unit: Unit, current_time: float,
                                         all_units: List[Unit]) -> Optional[Tuple[float, float]]:
         candidates = []
@@ -240,12 +273,12 @@ class Movement:
                 dx /= distance
                 dy /= distance
             speed = self.get_unit_speed(unit, unit.position)
-            next_x = unit.position[0] + dx * speed * time_step
-            next_y = unit.position[1] + dy * speed * time_step
-            # 통행 불가 셀(강·건물) 차단 — 지상 유닛만
-            if not self.terrain.is_passable((next_x, next_y), unit.unit_type):
+            # 직진 + 우회 시도 — 막히면 옆으로 돌아감
+            step = self._try_passable_step(unit, dx, dy, speed, time_step)
+            if step is None:
                 unit.update_action(Action.STOP)
                 return None
+            next_x, next_y = step
             return Event(
                 event_type=EventType.MOVE,
                 time=current_time + time_step,
@@ -310,15 +343,13 @@ class Movement:
             dx /= distance
             dy /= distance
 
-        # 다음 위치 계산 (지형 영향 포함)
+        # 다음 위치 계산 + 우회 시도 (강·건물·언덕 막히면 ±각도 회전)
         speed = self.get_unit_speed(unit, unit.position)
-        next_x = unit.position[0] + dx * speed * time_step
-        next_y = unit.position[1] + dy * speed * time_step
-
-        # 통행 불가 셀(강·건물) 차단 — 지상 유닛만
-        if not self.terrain.is_passable((next_x, next_y), unit.unit_type):
+        step = self._try_passable_step(unit, dx, dy, speed, time_step)
+        if step is None:
             unit.update_action(Action.STOP)
             return None
+        next_x, next_y = step
 
         return Event(
             event_type=EventType.MOVE,
