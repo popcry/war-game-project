@@ -385,24 +385,24 @@
       "id": "UA-INF-07",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 359,
-      "y": 472,
+      "x": 370,
+      "y": 447,
       "quantity": 9
     },
     {
       "id": "UA-INF-08",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 418,
-      "y": 528,
+      "x": 428,
+      "y": 404,
       "quantity": 9
     },
     {
       "id": "UA-INF-09",
       "team": "BLUE",
       "unitType": "RIFLE",
-      "x": 533,
-      "y": 502,
+      "x": 527,
+      "y": 283,
       "quantity": 9
     },
     {
@@ -417,8 +417,8 @@
       "id": "UA-AT-02",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 582,
-      "y": 414,
+      "x": 559,
+      "y": 302,
       "quantity": 2
     },
     {
@@ -449,16 +449,16 @@
       "id": "UA-AT-06",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 495,
-      "y": 525,
+      "x": 499,
+      "y": 300,
       "quantity": 2
     },
     {
       "id": "UA-AT-07",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
-      "x": 550,
-      "y": 423,
+      "x": 536,
+      "y": 308,
       "quantity": 2
     },
     {
@@ -473,16 +473,16 @@
       "id": "UA-TK-01",
       "team": "BLUE",
       "unitType": "TANK",
-      "x": 310,
-      "y": 442,
+      "x": 330,
+      "y": 434,
       "quantity": 1
     },
     {
       "id": "UA-TK-02",
       "team": "BLUE",
       "unitType": "TANK",
-      "x": 339,
-      "y": 520,
+      "x": 375,
+      "y": 479,
       "quantity": 1
     },
     {
@@ -537,8 +537,8 @@
       "id": "RU-ART-01",
       "team": "RED",
       "unitType": "ARTILLERY",
-      "x": 1160,
-      "y": 498,
+      "x": 1090,
+      "y": 680,
       "quantity": 6
     }
   ],
