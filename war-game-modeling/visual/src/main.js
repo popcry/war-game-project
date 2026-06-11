@@ -1133,7 +1133,7 @@ function _verbForStatus(s) {
 }
 
 function _formatKillTime(t) {
-  return `${t.toFixed(1)}s`;
+  return `${t.toFixed(1)}m`;   // 1 tick = 1 분
 }
 
 function _entryHtml(ev) {
@@ -2057,7 +2057,8 @@ function tick() {
   if (!scrubbing) {
     $scrub.value = String(Math.round((currentTime / scenario.duration) * 1000));
   }
-  const timeLabel = `${currentTime.toFixed(1)}s / ${scenario.duration.toFixed(1)}s`;
+  // CSV의 timestamp는 tick 단위 (1 tick = 1 분 가정) — 분(m)으로 표기
+  const timeLabel = `${currentTime.toFixed(1)}m / ${scenario.duration.toFixed(1)}m`;
   $time.textContent = timeLabel;
   $statTime.textContent = timeLabel;
 
