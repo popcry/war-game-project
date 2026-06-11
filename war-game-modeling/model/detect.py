@@ -208,10 +208,13 @@ class Detect:
         """Detect a target using glimpse probability and interval-scaled attempts."""
         if target.status not in FUNCTIONAL_STATUSES:
             return False
+        profile = OBSERVER_PROFILES[observer.unit_type]
+        distance_m = calculate_distance(observer, target) * PIXEL_TO_METER_SCALE
+        if distance_m > profile["equipment_range_m"]:
+            return False
         if not self.check_los(observer, target):
             return False
 
-        profile = OBSERVER_PROFILES[observer.unit_type]
         glimpse_probability = self.calculate_glimpse_probability(observer, target)
         attempts = profile["attempts_per_minute"] * max(0.0, detection_interval_s) / 60.0
         detection_probability = 1.0 - ((1.0 - glimpse_probability) ** attempts)

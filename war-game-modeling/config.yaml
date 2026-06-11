@@ -229,7 +229,7 @@ platform_overrides:
       unit_value: 0
       fire_cost: 5000000
     TANK:
-      speed_kmh: 36
+      speed_kmh: 10
       unit_value: 4000000000
       fire_cost: 2000000
     ARTILLERY:
@@ -258,7 +258,7 @@ platform_overrides:
       unit_value: 450000000
       fire_cost: 130000000
     TANK:
-      speed_kmh: 32
+      speed_kmh: 10
       unit_value: 2000000000
       fire_cost: 1500000
     ARTILLERY:
