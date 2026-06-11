@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "초기배치",
+  "name": "초기배치_short",
   "mapPath": "database/background_5x.png",
   "mapWidth": 1200,
   "mapHeight": 875,
@@ -254,70 +254,6 @@
       "quantity": 9
     },
     {
-      "id": "RU-INF-02",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 890,
-      "y": 680,
-      "quantity": 9
-    },
-    {
-      "id": "RU-INF-03",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 900,
-      "y": 675,
-      "quantity": 9
-    },
-    {
-      "id": "RU-INF-04",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 910,
-      "y": 670,
-      "quantity": 9
-    },
-    {
-      "id": "RU-INF-05",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 870,
-      "y": 615,
-      "quantity": 9
-    },
-    {
-      "id": "RU-INF-06",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 880,
-      "y": 610,
-      "quantity": 9
-    },
-    {
-      "id": "RU-INF-07",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 890,
-      "y": 605,
-      "quantity": 9
-    },
-    {
-      "id": "RU-INF-08",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 910,
-      "y": 750,
-      "quantity": 9
-    },
-    {
-      "id": "RU-INF-09",
-      "team": "RED",
-      "unitType": "RIFLE",
-      "x": 920,
-      "y": 745,
-      "quantity": 9
-    },
-    {
       "id": "RU-INF-10",
       "team": "RED",
       "unitType": "RIFLE",
@@ -374,83 +310,11 @@
       "quantity": 9
     },
     {
-      "id": "UA-INF-02",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 360,
-      "y": 455,
-      "quantity": 9
-    },
-    {
-      "id": "UA-INF-03",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 450,
-      "y": 455,
-      "quantity": 9
-    },
-    {
-      "id": "UA-INF-04",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 515,
-      "y": 350,
-      "quantity": 9
-    },
-    {
-      "id": "UA-INF-05",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 535,
-      "y": 350,
-      "quantity": 9
-    },
-    {
-      "id": "UA-INF-06",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 570,
-      "y": 320,
-      "quantity": 9
-    },
-    {
-      "id": "UA-INF-07",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 350,
-      "y": 530,
-      "quantity": 9
-    },
-    {
-      "id": "UA-INF-08",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 370,
-      "y": 530,
-      "quantity": 9
-    },
-    {
-      "id": "UA-INF-09",
-      "team": "BLUE",
-      "unitType": "RIFLE",
-      "x": 430,
-      "y": 525,
-      "quantity": 9
-    },
-    {
       "id": "UA-AT-01",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
       "x": 430,
       "y": 430,
-      "quantity": 2
-    },
-    {
-      "id": "UA-AT-02",
-      "team": "BLUE",
-      "unitType": "ANTI_TANK",
-      "x": 455,
-      "y": 445,
       "quantity": 2
     },
     {
@@ -462,14 +326,6 @@
       "quantity": 2
     },
     {
-      "id": "UA-AT-04",
-      "team": "BLUE",
-      "unitType": "ANTI_TANK",
-      "x": 540,
-      "y": 340,
-      "quantity": 2
-    },
-    {
       "id": "UA-AT-05",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
@@ -478,27 +334,11 @@
       "quantity": 2
     },
     {
-      "id": "UA-AT-06",
-      "team": "BLUE",
-      "unitType": "ANTI_TANK",
-      "x": 400,
-      "y": 510,
-      "quantity": 2
-    },
-    {
       "id": "UA-AT-07",
       "team": "BLUE",
       "unitType": "ANTI_TANK",
       "x": 445,
       "y": 500,
-      "quantity": 2
-    },
-    {
-      "id": "UA-AT-08",
-      "team": "BLUE",
-      "unitType": "ANTI_TANK",
-      "x": 370,
-      "y": 445,
       "quantity": 2
     },
     {
@@ -542,59 +382,11 @@
       "quantity": 3
     },
     {
-      "id": "UA-UAV-R-02",
-      "team": "BLUE",
-      "unitType": "DRONE",
-      "x": 545,
-      "y": 330,
-      "quantity": 3
-    },
-    {
-      "id": "UA-UAV-R-03",
-      "team": "BLUE",
-      "unitType": "DRONE",
-      "x": 380,
-      "y": 515,
-      "quantity": 3
-    },
-    {
       "id": "UA-FPV-01",
       "team": "BLUE",
       "unitType": "SELF_DEST_DRONE",
       "x": 390,
       "y": 420,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-02",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 430,
-      "y": 485,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-03",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 520,
-      "y": 360,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-04",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 360,
-      "y": 505,
-      "quantity": 5
-    },
-    {
-      "id": "UA-FPV-05",
-      "team": "BLUE",
-      "unitType": "SELF_DEST_DRONE",
-      "x": 340,
-      "y": 450,
       "quantity": 5
     },
     {
