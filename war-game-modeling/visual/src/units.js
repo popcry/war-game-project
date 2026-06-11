@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const TEAM_COLORS = {
   blue: { primary: 0x4ea0ff, dark: 0x244a78, accent: 0xb6d8ff },
@@ -1043,30 +1044,99 @@ const FACTORIES = {
   command_post: makeCommandPost,
 };
 
+// ─── Draw-call reduction ────────────────────────────────────────────────
+// A unit is a Group of 10–30 small greeble meshes, each with its own (per-unit)
+// material — so each is a separate draw call. At 200+ units that's >10k draw
+// calls/frame and the renderer becomes CPU-submit bound. We bake every *rigid*
+// mesh of a unit into a handful of merged meshes (one per distinct material),
+// collapsing a unit from dozens of draws to a single digit. Parts that must
+// animate independently — the turret (rotates) and drone rotors (spin) — are
+// left untouched.
+const _bakeMat = new THREE.Matrix4();
+const _bakeBox = new THREE.Box3();
+const _bakeSize = new THREE.Vector3();
+
+function isDescendantOf(node, ancestor) {
+  for (let p = node.parent; p; p = p.parent) if (p === ancestor) return true;
+  return false;
+}
+
+// Geometry transformed into `containerInverse`-space, normalized to a
+// non-indexed position/normal/uv set so every merge input is compatible.
+function bakeGeometry(mesh, containerInverse) {
+  let g = mesh.geometry.clone();
+  _bakeMat.multiplyMatrices(containerInverse, mesh.matrixWorld);
+  g.applyMatrix4(_bakeMat);
+  if (g.index) { const ng = g.toNonIndexed(); g.dispose?.(); g = ng; }
+  for (const name of Object.keys(g.attributes)) {
+    if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
+  }
+  return g;
+}
+
+// Merge the rigid meshes directly belonging to `container` (skipping any the
+// caller excludes) into one mesh per material. Originals are only removed once
+// their merge succeeds, so a merge failure degrades to "leave as separate
+// meshes" rather than dropping geometry.
+function mergeRigid(container, containerInverse, isExcluded) {
+  const byMat = new Map();   // material -> { geos: [], meshes: [] }
+  container.traverse(o => {
+    if (!o.isMesh || o === container || isExcluded(o)) return;
+    if (Array.isArray(o.material)) return;   // multi-material — leave alone
+    let entry = byMat.get(o.material);
+    if (!entry) { entry = { geos: [], meshes: [] }; byMat.set(o.material, entry); }
+    entry.geos.push(bakeGeometry(o, containerInverse));
+    entry.meshes.push(o);
+  });
+
+  const merged = [];
+  for (const [mat, { geos, meshes }] of byMat) {
+    let geo = null;
+    try { geo = geos.length === 1 ? geos[0] : mergeGeometries(geos, false); }
+    catch (_) { geo = null; }
+    if (!geo) { for (const g of geos) g.dispose?.(); continue; }
+    for (const m of meshes) m.removeFromParent();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    container.add(mesh);
+    merged.push(mesh);
+  }
+  return merged;
+}
+
 export function createUnit(type, team) {
   const factory = FACTORIES[type];
   if (!factory) throw new Error(`unknown unit type: ${type}`);
   const obj = factory(team);
-  // Shadow budget: a unit is a Group of 10–30 greeble meshes, and every
-  // shadow-caster is a separate draw call in the sun's shadow pass — at 200+
-  // units that's thousands of extra draws per frame. Cast a shadow from only
-  // the single largest mesh per unit (the hull/body); the contact shadow still
-  // grounds the unit, but the shadow pass shrinks ~15× per unit. receiveShadow
-  // stays off everywhere (units don't need self-shadowing).
+  obj.updateMatrixWorld(true);
+
+  const turret = obj.userData.turret ?? null;
+
+  // Body: everything except the turret subtree and spinning rotors. Baked in
+  // obj-local space (obj is at identity at build time, so its inverse is too).
+  const bodyInv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+  const bodyMeshes = mergeRigid(obj, bodyInv,
+    o => o.userData.spin || (turret && isDescendantOf(o, turret)));
+
+  // Turret: merge its own static greebles in turret-local space so it stays one
+  // pivoting node but draws in one piece.
+  if (turret) {
+    const turretInv = new THREE.Matrix4().copy(turret.matrixWorld).invert();
+    mergeRigid(turret, turretInv, o => o.userData.spin);
+  }
+
+  // Shadow budget: only the largest body piece casts — one contact shadow per
+  // unit grounds it without re-drawing every greeble into the shadow map.
   let biggest = null, biggestVol = -1;
-  const box = new THREE.Box3();
-  const size = new THREE.Vector3();
-  obj.traverse(o => {
-    if (!o.isMesh) return;
-    o.castShadow = false;
-    o.receiveShadow = false;
-    o.geometry.computeBoundingBox();
-    box.copy(o.geometry.boundingBox);
-    box.getSize(size);
-    const vol = size.x * size.y * size.z;
-    if (vol > biggestVol) { biggestVol = vol; biggest = o; }
-  });
+  for (const m of bodyMeshes) {
+    m.geometry.computeBoundingBox();
+    m.geometry.boundingBox.getSize(_bakeSize);
+    const vol = _bakeSize.x * _bakeSize.y * _bakeSize.z;
+    if (vol > biggestVol) { biggestVol = vol; biggest = m; }
+  }
   if (biggest) biggest.castShadow = true;
+
   obj.userData.type = type;
   obj.userData.team = team;
   return obj;

@@ -24,6 +24,11 @@ const TRANSITION_REAL_SECONDS = 1.0;
 
 const smoothstep = u => u * u * (3 - 2 * u);
 
+// Sentinel "shot" used while an agent-targeted shot has no on-field agent this
+// frame — the camera blends to the overhead home view and the label clears.
+// Treated as its own shot identity so we transition into and back out of it.
+const FALLBACK_TOPVIEW = Symbol('fallback-topview');
+
 export class CinematicDirector {
   constructor({ camera, controls, agentsById, domElement }) {
     this.camera = camera;
@@ -38,6 +43,9 @@ export class CinematicDirector {
     this._desiredPos = new THREE.Vector3();
     this._desiredTarget = new THREE.Vector3();
     this.onShotChange = null;
+    // Overhead view the camera retreats to when a shot's agent isn't on the
+    // field (dead, not yet spawned, or an unknown id). Set via setHomePose().
+    this.homePose = null;
 
     // Capture-phase pointer/wheel handler runs before OrbitControls' bubble
     // handler — so we can flip enabled=true synchronously and let the same
@@ -55,6 +63,27 @@ export class CinematicDirector {
   setShots(shots) {
     this.shots = [...shots].sort((a, b) => a.t - b.t);
     this.currentShot = null; // re-evaluate on next update
+  }
+
+  // Remember the overhead pose to fall back to when a shot's agent is missing.
+  setHomePose(position, target) {
+    this.homePose = { position: position.clone(), target: target.clone() };
+  }
+
+  _computeHome(outPos, outTarget) {
+    if (!this.homePose) return false;
+    outPos.copy(this.homePose.position);
+    outTarget.copy(this.homePose.target);
+    return true;
+  }
+
+  // An agent counts as "on the field this frame" only if it exists and its mesh
+  // is currently visible (applyFrame hides dead / not-yet-spawned units). Shots
+  // without an agent (static / free) are always considered present.
+  _agentPresent(shot) {
+    if (!shot.agent) return true;
+    const agent = this.agentsById.get(shot.agent);
+    return !!(agent && agent.mesh && agent.mesh.visible);
   }
 
   setEnabled(v) {
@@ -139,17 +168,26 @@ export class CinematicDirector {
     const shot = this.findShot(t);
     if (!shot) return;
 
-    if (shot !== this.currentShot) {
+    // When an agent-targeted shot has no on-field agent this frame, swap to the
+    // overhead home view and clear the label. Use a sentinel shot identity so
+    // the transition (and label state) flips cleanly in and back out.
+    const present = this._agentPresent(shot);
+    const activeShot = present ? shot : FALLBACK_TOPVIEW;
+
+    if (activeShot !== this.currentShot) {
       this._fromPos.copy(this.camera.position);
       this._fromTarget.copy(this.controls.target);
       this._transStartReal = performance.now() / 1000;
-      this.currentShot = shot;
-      if (this.onShotChange) this.onShotChange(shot);
+      this.currentShot = activeShot;
+      if (this.onShotChange) this.onShotChange(present ? shot : null);
     }
 
     if (shot.mode === 'free') return;
 
-    if (!this._computeDesired(shot, t, this._desiredPos, this._desiredTarget)) return;
+    const ok = present
+      ? this._computeDesired(shot, t, this._desiredPos, this._desiredTarget)
+      : this._computeHome(this._desiredPos, this._desiredTarget);
+    if (!ok) return;
 
     const elapsed = performance.now() / 1000 - (this._transStartReal ?? performance.now() / 1000);
     const u = Math.min(1, elapsed / TRANSITION_REAL_SECONDS);

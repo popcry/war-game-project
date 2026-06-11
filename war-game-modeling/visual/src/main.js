@@ -1144,6 +1144,10 @@ function wrapPi(a) {
 const director = new CinematicDirector({
   camera, controls, agentsById, domElement: renderer.domElement,
 });
+// Overhead view to retreat to when a cinematic shot's target agent isn't on
+// the field. Captured here while the camera is still at its initial top view,
+// before any shot has moved it.
+director.setHomePose(camera.position, controls.target);
 const $viewerLabel = document.getElementById('viewer-label');
 
 // Pretty-print an agent ID. "blue_drn_1" → "Blue Drone 1".
