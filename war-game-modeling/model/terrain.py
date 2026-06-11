@@ -67,6 +67,7 @@ class Terrain:
         self.trench_mask = None
         self.urban_mask = None
         self.forest_mask = None
+        self.railway_mask = None
         self.road_type_data = None
         self.MOUNTAIN_THRESHOLD = 50 / PIXEL_TO_METER_SCALE
         self.RIVER_THRESHOLD = 39 / PIXEL_TO_METER_SCALE
@@ -82,6 +83,7 @@ class Terrain:
         )
         urban_file_cache = self.terrain_config.get("urban_mask_file")
         forest_file_cache = self.terrain_config.get("forest_mask_file")
+        railway_file_cache = self.terrain_config.get("railway_mask_file")
         cache_key = (
             elevation_file,
             river_file,
@@ -89,6 +91,7 @@ class Terrain:
             trench_file,
             urban_file_cache,
             forest_file_cache,
+            railway_file_cache,
             trench_labels,
             self.terrain_config.get("mountain_threshold_m"),
             self.terrain_config.get("mountain_elevation_quantile", 0.75),
@@ -101,6 +104,7 @@ class Terrain:
             self.trench_mask = cached["trench_mask"]
             self.urban_mask = cached["urban_mask"]
             self.forest_mask = cached["forest_mask"]
+            self.railway_mask = cached["railway_mask"]
             self.road_type_data = cached["road_type_data"]
             self.MOUNTAIN_THRESHOLD = cached["mountain_threshold"]
             self.RIVER_THRESHOLD = None
@@ -142,6 +146,13 @@ class Terrain:
         else:
             self.forest_mask = np.zeros(shape, dtype=bool)
 
+        # railway mask (철도) — 선형 장애물, 감속
+        railway_file = self.terrain_config.get("railway_mask_file")
+        if railway_file and os.path.exists(railway_file):
+            self.railway_mask = self._read_csv_values(railway_file).astype(float) > 0
+        else:
+            self.railway_mask = np.zeros(shape, dtype=bool)
+
         threshold_m = self.terrain_config.get("mountain_threshold_m")
         if threshold_m is None:
             quantile = float(self.terrain_config.get("mountain_elevation_quantile", 0.75))
@@ -155,6 +166,7 @@ class Terrain:
             "trench_mask": self.trench_mask,
             "urban_mask": self.urban_mask,
             "forest_mask": self.forest_mask,
+            "railway_mask": self.railway_mask,
             "road_type_data": self.road_type_data,
             "mountain_threshold": self.MOUNTAIN_THRESHOLD,
         }
@@ -206,16 +218,29 @@ class Terrain:
             return False
         return bool(self.forest_mask[y_int, x_int])
 
+    def is_railway(self, position: Tuple[float, float]) -> bool:
+        """철도 회랑 셀 여부 — 선형 장애물, 횡단 시 감속."""
+        x_int, y_int = self._index_position(position)
+        if not self._in_bounds(x_int, y_int) or self.railway_mask is None:
+            return False
+        return bool(self.railway_mask[y_int, x_int])
+
+    def is_mountain(self, position: Tuple[float, float]) -> bool:
+        """언덕·산악 셀 여부 — DEM elevation이 mountain_threshold를 넘으면 True."""
+        return self.get_elevation(position) >= self.MOUNTAIN_THRESHOLD
+
     def is_passable(self, position: Tuple[float, float], unit_type) -> bool:
-        """지상 유닛 통행 가능 여부. 강·건물은 막힘. 드론은 항상 True (비행)."""
+        """지상 유닛 통행 가능 여부. 강·건물·언덕은 막힘. 드론은 항상 True (비행)."""
         # 드론과 자폭드론은 비행하므로 모두 통과
         from model.unit import UnitType
         if unit_type in (UnitType.DRONE, UnitType.SELF_DEST_DRONE):
             return True
-        # 지상 유닛: 강·건물은 차단
+        # 지상 유닛: 강·건물·언덕 차단
         if self.is_river(position):
             return False
         if self.is_urban(position):
+            return False
+        if self.is_mountain(position):
             return False
         return True
 
@@ -227,10 +252,11 @@ class Terrain:
         return road_type if road_type else "none"
 
     def get_terrain_type(self, position: Tuple[int, int]) -> str:
-        """Return terrain by priority: river → urban → trench → road → forest → mountain → normal.
+        """Return terrain by priority: river → urban → trench → road → railway → forest → mountain → normal.
 
-        통행 불가(차단): river, urban
-        통행 가능(감속): trench, road(가속), forest, mountain
+        통행 불가(차단): river, urban, mountain
+        통행 가능(감속): trench, railway, forest
+        가속: road
         """
         if self.is_river(position):
             return "river"
@@ -240,6 +266,8 @@ class Terrain:
             return "trench"
         if self.layered and self.get_road_type(position) != "none":
             return "road"
+        if self.layered and self.is_railway(position):
+            return "railway"
         if self.layered and self.is_forest(position):
             return "forest"
 

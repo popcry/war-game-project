@@ -12,6 +12,8 @@ with open('config.yaml', 'r', encoding='utf-8') as f:
 
 # Constants
 PIXEL_TO_METER_SCALE = config['simulation']['pixel_to_meter_scale']
+# 1 tick이 몇 초에 해당하는가 — config의 초 단위 시간값을 tick으로 환산할 때 사용
+SECONDS_PER_TICK = float(config['simulation'].get('seconds_per_tick', 1.0))
 _UNITS_CFG = config['units']
 _UNIT_OVERRIDES_CFG = config.get('unit_overrides', {})
 
@@ -81,13 +83,17 @@ class Unit:
         [a,b]   → uniform(a,b)
         [a,b,c] → triangular(low=a, high=b, mode=c)
         null    → 무한대 (사격 안 함, 예: 드론)
+
+        반환 단위는 tick. config 값은 초 단위이므로 ÷SECONDS_PER_TICK 으로 변환.
         """
         fi = _get_unit_cfg(self.team, self.unit_type).get('fire_interval')
         if fi is None:
             return float('inf')
         if len(fi) == 2:
-            return random.uniform(fi[0], fi[1])
-        return random.triangular(fi[0], fi[1], fi[2])
+            seconds = random.uniform(fi[0], fi[1])
+        else:
+            seconds = random.triangular(fi[0], fi[1], fi[2])
+        return seconds / SECONDS_PER_TICK
 
     def __post_init__(self):
         if self.target_list is None:

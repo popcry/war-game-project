@@ -17,6 +17,8 @@ MAP_WIDTH = config['simulation']['map_width_px']
 MAP_HEIGHT = config['simulation']['map_height_px']
 _MOV_CFG = config['movement']
 _DRONE_CFG = config['drone']
+# config의 초 단위 시간을 tick으로 환산하기 위한 상수
+_SECONDS_PER_TICK = float(config['simulation'].get('seconds_per_tick', 1.0))
 _UNITS_CFG = config['units']
 _PLATFORM_OVERRIDES = config.get('platform_overrides', {})
 _SCALING = config['scaling']
@@ -47,7 +49,8 @@ class Movement:
 
     # 드론 탐지 패턴 (config 기반) — TAI 중심 3×3 격자 순회 순서
     DRONE_PATTERN = [tuple(p) for p in _DRONE_CFG['pattern']]
-    DRONE_OBJECTIVE_CHANGE_TIME = _DRONE_CFG['pattern_change_time_s']
+    # config 'pattern_change_time_s' (초) → tick으로 환산
+    DRONE_OBJECTIVE_CHANGE_TIME = _DRONE_CFG['pattern_change_time_s'] / _SECONDS_PER_TICK
     DRONE_GRID_SIZE = _DRONE_CFG['grid_cell_size_m'] / PIXEL_TO_METER_SCALE
 
     def __init__(self):

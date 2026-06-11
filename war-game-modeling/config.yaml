@@ -4,7 +4,7 @@
 # 모든 하이퍼파라미터를 이 파일에서 관리합니다.
 # ============================================================
 
-max_time: 3600
+max_time: 120         # 1 tick = 1분 가정 → 120 tick = 2시간 시뮬
 
 # --- 비디오 / CSV 출력 ---
 video:
@@ -26,6 +26,7 @@ distance_rescale: 1
 #   캔버스 1200×875 × 25 m/px → 정확히 매핑
 simulation:
   pixel_to_meter_scale: 25.0   # 1 pixel = 25 meters  (5 → 25, 스케일 5배 증가)
+  seconds_per_tick: 60         # 1 tick = 60초 = 1분 — config의 초 단위 값은 코드에서 ÷60해 tick으로 변환
   map_width_px: 1200
   map_height_px: 875
   background_image_path: "database/background_5x.png"
@@ -43,8 +44,8 @@ simulation:
 # --- 스케일 보정 상수 (원본 코드 호환) ---
 scaling:
   range_extra_div_non_artillery: 1   # 포병 외 사거리도 명목 그대로 (5x 맵용; 종전 5는 원본 5m/px 호환용)
-  speed_scale_divisor: 5             # km/h → px/s 변환 제수
-  speed_time_multiplier: 5           # 30 → 5 (1 tick = 1초, 이동·사격 정렬)
+  speed_scale_divisor: 1             # km/h → px/tick 변환 제수 (5→1, 청결화)
+  speed_time_multiplier: 60          # 1 tick = 1분 — config km/h가 분당 이동량으로 변환
 
 # --- 탐지 / LOS ---
 detection:
@@ -176,7 +177,7 @@ units:
   RIFLE:
     detect_range_m: 1000
     detectability: 0.8
-    speed_kmh: 7
+    speed_kmh: 3
     weapon_range_m: 500
     fire_interval: [2.0, 3.0]
   ANTI_TANK:
@@ -189,7 +190,7 @@ units:
     detect_range_m: 3000
     detectability: 2.0
     weapon_range_m: 3000
-    speed_kmh: 13
+    speed_kmh: 10
     fire_interval: [5.0, 10.0, 6.0]
   ARTILLERY:
     detect_range_m: 1000
@@ -469,16 +470,18 @@ terrain:
   trench_mask_file: "database/vuhledar_5x_trench_mask.csv"
   urban_mask_file: "database/vuhledar_5x_urban_mask.csv"     # 건물·시가지 — 지상 통행 불가
   forest_mask_file: "database/vuhledar_5x_forest_mask.csv"   # 산림 — 지상 감속
+  railway_mask_file: "database/vuhledar_5x_railway_mask.csv" # 철도 회랑 — 횡단 감속
   trench_labels: [1, "1", "trench", "true", "t"]
   mountain_elevation_quantile: 0.75
   mobility:
-    normal: 1.0
-    mountain: 0.8
-    river: 0.0        # 차단 (is_passable이 차단; 곱연산 안전망)
-    road: 1.15
+    normal: 0.9       # open field — 살짝 감속 (도로 대비 90%)
+    mountain: 0.0     # 차단 (is_passable; 곱연산 안전망)
+    river: 0.0        # 차단 (water)
+    road: 1.0         # 도로 — 원래 속도 유지 (베이스라인)
     trench: 0.7
-    urban: 0.0        # 차단
-    forest: 0.5       # 산림 감속 — 보병 행군 절반 속도
+    urban: 0.0        # 차단 (building)
+    forest: 0.5       # 산림 — 절반 속도
+    railway: 0.6      # 철도 — 둑·선로 횡단 어려움
   visibility:
     normal: 1.0
     mountain: 0.8
@@ -487,6 +490,7 @@ terrain:
     trench: 0.5
     urban: 0.7        # 건물 사이 시야 감소
     forest: 0.5       # 수풀 은폐
+    railway: 0.9      # 철도 — 둑 약간의 차폐
   hit_probability:
     normal: 1.0
     mountain: 0.9
@@ -495,6 +499,7 @@ terrain:
     trench: 1.0      # 0.6 → 1.0 (Trench 행이 이미 강한 방호 — 이중 감산 제거)
     urban: 0.9       # 건물 차폐로 약간 감소
     forest: 0.9      # 수풀로 약간 감소
+    railway: 0.95    # 철도 — 둑 살짝 차폐
   damage_probability:
     normal: 1.0
     mountain: 0.9
@@ -503,3 +508,4 @@ terrain:
     trench: 1.0      # 0.6 → 1.0 (이중 감산 제거)
     urban: 0.9
     forest: 0.9
+    railway: 0.95
