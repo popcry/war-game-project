@@ -292,6 +292,8 @@ class Terrain:
             return False
         if self.is_river(position):
             return unit_type in (UnitType.RIFLE, UnitType.ANTI_TANK)
+        if self.layered and self.is_trench(position):
+            return unit_type in (UnitType.RIFLE, UnitType.ANTI_TANK)
         return True
 
     def is_passable_path(self, from_pos: Tuple[float, float], to_pos: Tuple[float, float], unit_type) -> bool:
@@ -417,6 +419,8 @@ class Terrain:
             if self.bridge_mask is not None:
                 blocked_water = blocked_water & ~self.bridge_mask
             passable &= ~blocked_water
+        if group == "ground" and self.trench_mask is not None:
+            passable &= ~self.trench_mask
         # amphib는 강 통과
 
         if not passable[goal_y, goal_x]:

@@ -27,14 +27,14 @@ const HEIGHT_GRID_URL = '../results/vuhledar_5x_height_grid.png';
 
 // Trench mask: binary (0/1) CSV stretched over the same UV space as the
 // terrain grids — its native resolution does not need to match (bilinear
-// sampling acts as resize-to-fit). Vertex Y is depressed by `mask × DEPTH`
-// at each sample, so fractional values at cell edges give naturally sloped
-// trench walls. sampleHeight() for unit placement is left untouched, so
-// units continue to stand on the un-trenched surface.
+// sampling acts as resize-to-fit). Vertex Y and sampleHeight() are both
+// depressed by `mask × DEPTH`, so units and ground markers sit in the same
+// trench surface that the terrain mesh displays.
 const TRENCH_MASK_URL = '../results/vuhledar_5x_trench_mask.csv';
 const BRIDGE_MASK_URL = '../results/vuhledar_5x_bridge_mask.csv';
-const TRENCH_DEPTH    = 2.5;    // world-m depression where mask = 1
+const TRENCH_DEPTH    = 1.3;    // world-m depression where mask = 1
 const TRENCH_FLIP_V   = false;  // true if CSV row 0 = south (default assumes north)
+const TRENCH_COLOR_LIFT = 0.08; // slightly above terrain to avoid z-fighting
 
 // Forest grass tufts: where the terrain overlay PNG is green (forest class),
 // scatter InstancedMesh blades on the displaced ground. Green is detected
@@ -254,6 +254,9 @@ try {
   ground.name = 'terrain.ground';
   scene.add(ground);
 
+  const trenchOverlay = buildTrenchOverlay(trenchMask, geo);
+  if (trenchOverlay) scene.add(trenchOverlay);
+
   // Accumulating drone-recon overlay rides a clone of this exact displaced
   // geometry, so scouted ground hugs the terrain instead of floating flat.
   detection = new DetectionOverlay({ scene, geometry: geo, planeSize: PLANE_SIZE });
@@ -264,7 +267,9 @@ try {
     const u = (x + PLANE_SIZE / 2) / PLANE_SIZE;
     const v = (PLANE_SIZE / 2 - z) / PLANE_SIZE;
     if (u < 0 || u > 1 || v < 0 || v > 1) return 0;
-    return sampleGridBilinear(heightGrid, u, v) * HEIGHT_SCALE;
+    const h = sampleGridBilinear(heightGrid, u, v) * HEIGHT_SCALE;
+    const m = sampleGridBilinear(trenchMask, u, TRENCH_FLIP_V ? 1 - v : v);
+    return h - m * TRENCH_DEPTH;
   };
 
   // Grass tufts on forest (green) cells. colorTex.image is the HTMLImageElement
@@ -358,6 +363,79 @@ function sampleGridBilinear(g, u, v) {
   const p01 = g.grid[y1 * g.w + x0];
   const p11 = g.grid[y1 * g.w + x1];
   return (1 - a) * ((1 - b) * p00 + b * p01) + a * ((1 - b) * p10 + b * p11);
+}
+
+function buildTrenchOverlay(trenchMask, terrainGeometry) {
+  const grid = trenchMask?.grid;
+  const w = trenchMask?.w;
+  const h = trenchMask?.h;
+  if (!grid || !w || !h) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const image = ctx.createImageData(w, h);
+  const data = image.data;
+  let hasTrench = false;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      if (grid[idx] <= 0.35) continue;
+      hasTrench = true;
+
+      const edge =
+        x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
+        grid[idx - 1] <= 0.35 ||
+        grid[idx + 1] <= 0.35 ||
+        grid[idx - w] <= 0.35 ||
+        grid[idx + w] <= 0.35;
+
+      const out = idx * 4;
+      if (edge) {
+        data[out + 0] = 118;
+        data[out + 1] = 72;
+        data[out + 2] = 30;
+        data[out + 3] = 235;
+      } else {
+        data[out + 0] = 72;
+        data[out + 1] = 43;
+        data[out + 2] = 18;
+        data[out + 3] = 190;
+      }
+    }
+  }
+  if (!hasTrench) return null;
+
+  ctx.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+
+  const geo = terrainGeometry.clone();
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, pos.getY(i) + TRENCH_COLOR_LIFT);
+  }
+  pos.needsUpdate = true;
+
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      alphaTest: 0.02,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  mesh.name = 'terrain.trenchOverlay';
+  mesh.renderOrder = 1;
+  return mesh;
 }
 
 function buildForestGrass(colorImage, sampleHeightFn) {
