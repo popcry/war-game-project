@@ -253,6 +253,8 @@
     }
     #controls button:hover { background:#1e2c3d; }
     #controls button.primary { background:var(--accent); color:#1a1300; border-color:transparent; font-weight:600; }
+    #controls button.recording { background:var(--red); color:#fff; border-color:transparent; animation:rec-pulse 1.2s infinite; }
+    @keyframes rec-pulse { 0%,100% { opacity:1; } 50% { opacity:0.65; } }
     #scrub { flex:1; }
     #time  { font-variant-numeric: tabular-nums; font-size:12px; color:var(--muted); min-width:90px; text-align:right; }
     #speed { background:#172230; color:var(--text); border:1px solid #2a3a4d; padding:5px 8px; border-radius:8px; }
@@ -344,6 +346,7 @@
     <button id="btn-sound">🔊 Sound: ON</button>
     <button id="btn-detect">🛰 Detection: ON</button>
     <button id="btn-graph">📊 Graph</button>
+    <button id="btn-record" title="3D 화면을 영상으로 녹화 후 자동 다운로드">⏺ Record</button>
     <input id="scrub" type="range" min="0" max="1000" value="0" step="1" />
     <span id="time">0.0s / 0.0s</span>
     <select id="speed">
@@ -358,11 +361,15 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      "three": "./vendor/three/three.module.js",
+      "three/addons/": "./vendor/three/addons/"
     }
   }
   </script>
+  <!-- WebM duration patcher: MediaRecorder가 만든 WebM은 헤더에 duration이 없어서
+       플레이어가 길이를 모르고 시킹/진행바가 안 됩니다. 이 라이브러리가 후처리로
+       SegmentInfo에 Duration을 주입해 일반 재생기에서 정상적으로 보이게 합니다. -->
+  <script src="./vendor/fix-webm-duration.js"></script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

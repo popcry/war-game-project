@@ -34,6 +34,9 @@ simulation:
   mountain_detect_prob: 0.2    # 산악 지형 탐지 확률
   drone_elevation: 200.0       # 드론 비행 고도 (m)
   combat_unit_types: [RIFLE, ANTI_TANK, TANK, ARTILLERY]
+  # 종료 조건: 한 팀의 (사격 가능 / 초기 전투 유닛 수)가 이 비율 미만이면 그 팀 패배.
+  # 1.0 = 1명만 사격 못해도 즉시 패, 0.0 = 전멸까지 가야 함, 0.30 = 30% 이하로 떨어지면 패
+  defeat_combat_ratio: 0.30
   # 새 bbox (참고용, 코드에서 직접 안 씀)
   bbox:
     south: 47.6664170
@@ -191,13 +194,13 @@ units:
     detectability: 2.0
     weapon_range_m: 3000
     speed_kmh: 10
-    fire_interval: [30.0, 90.0, 60.0]   # 분당 1발 (triangular, 평균 60초)
+    fire_interval: [15.0, 30.0, 20.0]   # 분당 3발 (triangular, 평균 20초) — 실전 MBT sustained
   ARTILLERY:
     detect_range_m: 1000
     detectability: 2.0
     weapon_range_m: 11300
     speed_kmh: 0
-    fire_interval: [6.0, 20.0, 10.0]
+    fire_interval: [15.0, 30.0, 20.0]   # 분당 3발 (K9 표준 sustained)
   DRONE:
     detect_range_m: 2000
     detectability: 0
@@ -251,15 +254,15 @@ platform_overrides:
       fire_cost: 0
   BLUE:
     RIFLE:
-      speed_kmh: 3
+      speed_kmh: 1.5      # RED 보병(3)의 ½ — BLUE는 RED 쪽으로 전진하되 천천히
       unit_value: 500000
       fire_cost: 500
     ANTI_TANK:
-      speed_kmh: 3
+      speed_kmh: 1.5      # RED AT(3)의 ½
       unit_value: 450000000
       fire_cost: 130000000
     TANK:
-      speed_kmh: 10
+      speed_kmh: 5        # RED 전차(10)의 ½
       unit_value: 2000000000
       fire_cost: 1500000
     ARTILLERY:
@@ -315,15 +318,15 @@ phases:
     phase_1:
       TAI: [900, 600]    # 5x map: RED 진영(동남) 정찰
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 3, ARTILLERY: 1, COMMAND_POST: 2}
-      maneuver_objective: [[520, 430]]    # 방어 전진 — BLUE 중심(~433,367)에서 RED(SE) 방향 약 100px 전진
+      maneuver_objective: [[1110, 601]]   # RED CP까지 깊숙이 침투 (속도는 platform_overrides에서 절반)
     phase_2:
       TAI: [900, 600]
       fire_priority: {RIFLE: 5, ANTI_TANK: 4, TANK: 1, ARTILLERY: 3, COMMAND_POST: 2}
-      maneuver_objective: [[520, 430]]    # 방어 — 진형 유지
+      maneuver_objective: [[1110, 601]]
     phase_3:
       TAI: [900, 600]
       fire_priority: {RIFLE: 4, ANTI_TANK: 2, TANK: 1, ARTILLERY: 5, COMMAND_POST: 3}
-      maneuver_objective: [[520, 430]]    # 방어 — 진형 유지 (RED 근접 시 교전)
+      maneuver_objective: [[1110, 601]]
 
 # Phase 전환 조건
 phase_transitions:

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Visual 진단</title>
+<style>
+  body { font-family: ui-monospace, Menlo, monospace; background:#111; color:#ddd; padding:24px; }
+  h1 { color:#9cf; }
+  .row { padding:6px 0; border-bottom:1px solid #222; }
+  .ok { color:#7f7; }
+  .fail { color:#f77; }
+  .wait { color:#fc7; }
+  .meta { color:#888; font-size:12px; }
+  button { background:#264; color:#fff; border:0; padding:8px 14px; border-radius:6px; cursor:pointer; margin-right:8px; }
+</style>
+</head>
+<body>
+<h1>3D Viewer 진단</h1>
+<p>각 리소스가 얼마나 빨리/늦게/실패하는지 확인합니다. <button onclick="run()">▶ Run again</button></p>
+<div id="out"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
+  }
+}
+</script>
+
+<script type="module">
+const TARGETS = [
+  { name: 'three.js (로컬)', url: './vendor/three/three.module.js', kind: 'fetch' },
+  { name: 'OrbitControls (로컬)', url: './vendor/three/addons/controls/OrbitControls.js', kind: 'fetch' },
+  { name: 'simulation.csv', url: '../results/simulation.csv', kind: 'fetch' },
+  { name: 'money.csv', url: '../results/money.csv', kind: 'fetch' },
+  { name: 'cameras.json', url: '../results/cameras.json', kind: 'fetch' },
+  { name: 'terrain_overlay.png', url: '../results/vuhledar_5x_terrain_overlay.png', kind: 'fetch' },
+  { name: 'height_grid.png', url: '../results/vuhledar_5x_height_grid.png', kind: 'fetch' },
+  { name: 'trench_mask.csv', url: '../results/vuhledar_5x_trench_mask.csv', kind: 'fetch' },
+  { name: 'bridge_mask.csv', url: '../results/vuhledar_5x_bridge_mask.csv', kind: 'fetch' },
+  { name: 'forest_mask.csv', url: '../results/vuhledar_5x_forest_mask.csv', kind: 'fetch' },
+  { name: 'urban_mask.csv', url: '../results/vuhledar_5x_urban_mask.csv', kind: 'fetch' },
+  { name: 'railway_mask.csv', url: '../results/vuhledar_5x_railway_mask.csv', kind: 'fetch' },
+  { name: 'three.js 모듈 import', url: 'three', kind: 'module-import' },
+];
+
+const out = document.getElementById('out');
+
+function row(text, cls='wait', meta='') {
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.innerHTML = `<span class="${cls}">${text}</span> <span class="meta">${meta}</span>`;
+  out.appendChild(div);
+  return div;
+}
+
+async function timed(label, fn) {
+  const div = row(`⏳ ${label}`, 'wait');
+  const t0 = performance.now();
+  try {
+    const result = await fn();
+    const dt = (performance.now() - t0).toFixed(0);
+    div.innerHTML = `<span class="ok">✅ ${label}</span> <span class="meta">${dt}ms ${result || ''}</span>`;
+  } catch (err) {
+    const dt = (performance.now() - t0).toFixed(0);
+    div.innerHTML = `<span class="fail">❌ ${label}</span> <span class="meta">${dt}ms — ${err.message}</span>`;
+  }
+}
+
+async function run() {
+  out.innerHTML = '';
+  row(`User agent: ${navigator.userAgent}`, 'meta');
+  row(`Location: ${location.href}`, 'meta');
+
+  for (const t of TARGETS) {
+    if (t.kind === 'fetch') {
+      await timed(`fetch ${t.name}`, async () => {
+        const res = await fetch(t.url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        return `${(buf.byteLength / 1024).toFixed(0)} KB`;
+      });
+    } else if (t.kind === 'module-import') {
+      await timed(`import "${t.url}"`, async () => {
+        const mod = await import(t.url);
+        return `keys: ${Object.keys(mod).length}`;
+      });
+    }
+  }
+  row('완료. 위에서 ❌ 또는 매우 느린(>3000ms) 항목을 알려주세요.', 'ok');
+}
+
+run();
+</script>
+</body>
+</html>

@@ -492,6 +492,21 @@ const WRECK_SPECS = {
   infantry:  { flameCount: 0, smokeCount: 0, intensity: 0.0,  extent: 0.4, tip: true  },
 };
 
+// 사망 후 잔해/링 페이드 — local = t-deathTime (단위: scenario tick = 1분)
+// [0..HOLD]              : 100% (사망 직후 일정 시간 풀 가시 — 어디서 죽었는지 보이게)
+// [HOLD..HOLD+FADE]      : 선형 페이드 1 → FLOOR
+// [HOLD+FADE..]          : FLOOR 유지 (완전히 안 사라짐 — 흐릿하게 그대로 남음)
+export const DEATH_FADE_HOLD = 5.0;     // 5틱(5분)간 풀 가시
+export const DEATH_FADE_DURATION = 2.0; // 이후 2틱 동안 점차 흐려짐
+export const DEATH_FADE_FLOOR = 0.20;   // 최종 투명도 (아예 사라지진 않음)
+export function deathFadeFactor(local) {
+  if (local < 0) return 0;
+  if (local <= DEATH_FADE_HOLD) return 1;
+  const u = (local - DEATH_FADE_HOLD) / DEATH_FADE_DURATION;
+  if (u >= 1) return DEATH_FADE_FLOOR;
+  return 1 - u * (1 - DEATH_FADE_FLOOR);
+}
+
 class WreckageEffect {
   constructor(spec, deathTime, sampleHeight) {
     this.spec = spec;
@@ -513,6 +528,8 @@ class WreckageEffect {
       color: 0x0a0807, roughness: 1.0, metalness: 0.05,
       emissive: 0x331100,
       emissiveIntensity: w.intensity > 0 ? 0.4 : 0.0,
+      transparent: true,           // 사망 후 페이드 아웃 가능하게
+      depthWrite: true,
     });
 
     // Free the original per-mesh materials before we orphan them.
@@ -606,13 +623,16 @@ class WreckageEffect {
       return;
     }
     if (!this._resolved) this._resolveAnchor();
+    // 사망 페이드 — HOLD 후 흐릿하게 줄어들지만 완전히 사라지진 않음
+    const fade = deathFadeFactor(local);
     this.group.visible = true;
+    this.charMat.opacity = fade;
 
     if (this.w.intensity <= 0) return; // infantry: hull only, no fire/smoke
 
     // Flame intensity decays from peak quickly, then smoulders. exp(-t/12)
     // gives ~0.43 at 10s, ~0.19 at 20s; floor of 0.15 keeps embers alive.
-    const flameI = this.w.intensity * (0.15 + 0.85 * Math.exp(-local / 12));
+    const flameI = this.w.intensity * (0.15 + 0.85 * Math.exp(-local / 12)) * fade;
 
     for (const f of this.flames) {
       const flicker = 0.7 + 0.3 * Math.sin(f.userData.phase + local * f.userData.freq);
@@ -630,7 +650,7 @@ class WreckageEffect {
     }
 
     // Smoke decays slower than flame — wreck still smokes long after fire dies.
-    const smokeI = this.w.intensity * (0.35 + 0.65 * Math.exp(-local / 35));
+    const smokeI = this.w.intensity * (0.35 + 0.65 * Math.exp(-local / 35)) * fade;
     for (const s of this.smokes) {
       const u = ((local + s.userData.phase) % s.userData.period) / s.userData.period;
       s.position.set(

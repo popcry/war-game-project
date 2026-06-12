@@ -123,6 +123,24 @@ class ProbabilitySystem:
 
         return 0.0
 
+    # Pk/h를 단계적 손상 상태로 분할하는 비율 (합 = 1.0).
+    # damage_logics 테이블에는 Pk/h만 있고 부분 손상 확률이 없어서
+    # 항상 K_KILL/FATAL로만 점프하는 문제 해결 — 더 현실적으로 분배.
+    # 가벼운 손상이 가장 자주, 완전 파괴는 드물게.
+    # 키 삽입 순서가 cumulative 샘플링 순서. 가벼운 손상부터.
+    _VEHICLE_KILL_SPLIT = {
+        Status.M_KILL:  0.35,
+        Status.F_KILL:  0.25,
+        Status.MF_KILL: 0.15,
+        Status.K_KILL:  0.25,
+    }
+    _INFANTRY_KILL_SPLIT = {
+        Status.MINOR:    0.40,
+        Status.SERIOUS:  0.25,
+        Status.CRITICAL: 0.20,
+        Status.FATAL:    0.15,
+    }
+
     @classmethod
     def get_kill_probability(
         cls,
@@ -132,7 +150,13 @@ class ProbabilitySystem:
         protection_state: str,
         side: Optional[str] = None,
     ) -> Dict[Status, float]:
-        """Return Pk/h from config probabilities.damage_logics."""
+        """Return Pk/h split across damage severities.
+
+        Pk/h is the table's *total* conditional-damage probability — given a hit,
+        chance of any damage. We spread it across M/F/MF/K (vehicles) or
+        MINOR/SERIOUS/CRITICAL/FATAL (infantry) so the killfeed sees the full
+        5-state NATO progression instead of only K_KILL.
+        """
         row = cls._find_damage_logic(attacker_type, target_type, protection_state, side)
         if row is None:
             return {}
@@ -143,9 +167,10 @@ class ProbabilitySystem:
         if probability is None:
             return {}
 
-        if target_type in [UnitType.RIFLE, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
-            return {Status.FATAL: probability}
-        return {Status.K_KILL: probability}
+        split = (cls._INFANTRY_KILL_SPLIT
+                 if target_type in [UnitType.RIFLE, UnitType.ANTI_TANK, UnitType.COMMAND_POST]
+                 else cls._VEHICLE_KILL_SPLIT)
+        return {status: probability * weight for status, weight in split.items()}
 
     @classmethod
     def is_in_damage_logic_range(

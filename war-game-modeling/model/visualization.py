@@ -177,9 +177,11 @@ class Visualizer:
         panel_surface.set_alpha(200)  # 반투명 효과
         self.screen.blit(panel_surface, (panel_x, panel_y))
         
-        # 각 팀의 생존 유닛 수와 전체 유닛 수 계산
-        red_count = sum(1 for unit in units if unit.team == Team.RED and unit.status.value in ["ALIVE", "M_KILL"])
-        blue_count = sum(1 for unit in units if unit.team == Team.BLUE and unit.status.value in ["ALIVE", "M_KILL"])
+        # 각 팀의 생존 유닛 수 — "사격 가능"(can_fire) 유닛만 카운트.
+        # 차량: ALIVE / M_KILL  /  보병: MINOR / ALIVE / M_KILL (M_KILL은 의미없지만 일관성)
+        # 즉 F_KILL·MF_KILL·SERIOUS·CRITICAL·K_KILL·FATAL은 모두 차감.
+        red_count = sum(1 for unit in units if unit.team == Team.RED and unit.can_fire())
+        blue_count = sum(1 for unit in units if unit.team == Team.BLUE and unit.can_fire())
         red_count_total = sum(1 for unit in units if unit.team == Team.RED)
         blue_count_total = sum(1 for unit in units if unit.team == Team.BLUE)
         

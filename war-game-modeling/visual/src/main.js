@@ -4,7 +4,7 @@ import { createUnit } from './units.js';
 import { loadScenarioFromCsv } from './csvLoader.js';
 import { loadMoneyFromCsv, sampleMoney } from './moneyLoader.js';
 import { CinematicDirector, loadCameraSchedule } from './cinematic.js';
-import { EffectsManager, attachDamageEffect, createStatusRing } from './effects.js';
+import { EffectsManager, attachDamageEffect, createStatusRing, deathFadeFactor } from './effects.js';
 import { DetectionOverlay } from './detection.js';
 import { openBattleGraph } from './graphWindow.js';
 
@@ -890,6 +890,14 @@ function findDeathPos(track) {
   return null;
 }
 
+// 사망 시각 (k_kill로 바뀐 keyframe의 t) — ring fade 계산에 사용
+function findKKillTime(track) {
+  for (const kf of track) {
+    if (kf.status === 'k_kill') return kf.t;
+  }
+  return null;
+}
+
 const agents = scenario.agents.map(a => {
   const mesh = createUnit(a.type, a.team);
   mesh.visible = false; // shown once we apply first frame
@@ -924,6 +932,7 @@ const agents = scenario.agents.map(a => {
     originalColors,
     ring,
     deathPos: findDeathPos(a.track),
+    deathTime: findKKillTime(a.track),   // null if never destroyed; else scenario t when k_kill fired
     visualApplied: 'operational',   // last 3-state visual applied (guards applyStatusVisuals)
   };
 });
@@ -1314,6 +1323,7 @@ function applyStatusVisuals(ag, status) {
   if (status === 'incapacitated') {
     for (const [m, c] of ag.originalColors) m.color.copy(c).multiplyScalar(INCAP_DARKEN);
     ag.ring.material.color.setHex(INCAP_RING_HEX);
+    ag.ring.material.opacity = 0.85;   // 페이드 잔재 리셋 (스크럽 대비)
     ag.ring.visible = true;
   } else {
     // Both 'operational' and 'destroyed' want the underlying mesh colors
@@ -1323,6 +1333,7 @@ function applyStatusVisuals(ag, status) {
     if (status === 'destroyed') {
       const hex = TEAM_PRIMARY_HEX[ag.spec.team] ?? 0xffffff;
       ag.ring.material.color.setHex(hex);
+      ag.ring.material.opacity = 0.85;   // 페이드는 applyFrame이 매 프레임 갱신
       ag.ring.visible = true;
     } else {
       ag.ring.visible = false;
@@ -1439,13 +1450,14 @@ function applyFrame(t) {
         ag.ring.position.set(s.x, groundY + STATUS_RING_Y, s.z);
       }
 
-      // Stats: track operational and incapacitated separately. Both count
-      // as "still on the field" for the numeric tally; the bar splits them
-      // into two colored segments so the damaged fraction is visible. The
-      // raw 5-state is preserved on s.status for the inspector / hover —
-      // only the bucket sum collapses incap subtypes.
-      const bucketKey = vis === 'incapacitated' ? 'incap'
-                      : vis === 'operational'   ? 'op'
+      // Stats: "생존 = 사격 가능" 기준 — 시뮬 unit.can_fire() 로직과 동일.
+      //   op    : ALIVE + M_KILL  (CSV: alive, m_kill — 보병 MINOR도 alive로 매핑됨)
+      //   incap : F_KILL + MF_KILL (사격 불가 — 생존에서 차감)
+      //   destroyed (k_kill): 별도, 카운트 안 함
+      // visualState는 이제 표시(다크닝/링)에만 쓰고, 카운트는 raw status로 분기.
+      const canFire = s.status === 'alive' || s.status === 'm_kill';
+      const bucketKey = canFire ? 'op'
+                      : (s.status === 'f_kill' || s.status === 'mf_kill') ? 'incap'
                       : null;
       if (bucketKey) {
         const bucket = counts[bucketKey][ag.spec.team];
@@ -1456,10 +1468,16 @@ function applyFrame(t) {
       if (ag.damage) ag.damage.setVisible(false);
       if (ag.scoutRing) ag.scoutRing.visible = false;
       if (ag.cpDome) ag.cpDome.visible = false;
-      // Team-colored ring stays at the death site alongside the wreckage.
+      // Team-colored ring stays at the death site alongside the wreckage —
+      // 단, 사망 후 일정 시간 지나면 페이드아웃해 맵을 깨끗하게 유지.
       if (ag.deathPos) {
         const dp = ag.deathPos;
         ag.ring.position.set(dp.x, sampleHeight(dp.x, dp.z) + STATUS_RING_Y, dp.z);
+      }
+      if (ag.deathTime != null) {
+        const fade = deathFadeFactor(t - ag.deathTime);
+        ag.ring.material.opacity = 0.85 * fade;
+        ag.ring.visible = true;   // FLOOR가 0보다 크니 항상 보이게
       }
       // wreckage at the death site is rendered by EffectsManager's
       // WreckageEffect — keyed off scenario time so it appears/disappears
@@ -1807,6 +1825,136 @@ function buildGraphData() {
 const $btnGraph = document.getElementById('btn-graph');
 $btnGraph?.addEventListener('click', () => openBattleGraph(buildGraphData()));
 
+// ---------- Canvas 녹화 → MP4/WebM 다운로드 ----------
+// MediaRecorder + canvas.captureStream으로 3D 뷰어 캔버스를 실시간 녹화.
+// 시나리오 시작(t=0)부터 끝까지 자동 재생 후 다운로드. 중간 클릭으로 수동 정지 가능.
+const $btnRecord = document.getElementById('btn-record');
+let mediaRecorder = null;
+let recChunks = [];
+let recOriginalSpeed = null;
+let recStopAtEnd = null;   // requestAnimationFrame callback id
+let recStartedAt = 0;      // performance.now() at MediaRecorder.start — used to patch WebM duration
+
+function pickRecorderMime() {
+  // WebM 우선: MediaRecorder가 만든 WebM은 fix-webm-duration으로 SegmentInfo의
+  // Duration을 후처리할 수 있어서, 다운로드 후에도 진행바/시킹이 정상 동작한다.
+  // MP4(MediaRecorder가 만드는 fragmented MP4)는 moov 메타데이터 위치 문제로
+  // 길이/시킹이 깨지고, 브라우저 단일에서 깨끗하게 패치하기 까다롭다.
+  const candidates = [
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+    'video/mp4;codecs=avc1.42E01E',  // 폴백
+    'video/mp4',
+  ];
+  for (const m of candidates) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return '';   // 브라우저 기본
+}
+
+function startRecording() {
+  if (mediaRecorder) return;
+  if (typeof MediaRecorder === 'undefined') {
+    alert('이 브라우저는 MediaRecorder를 지원하지 않습니다.');
+    return;
+  }
+  const canvas = renderer.domElement;
+  const stream = canvas.captureStream(30);   // 30 fps
+  const mime = pickRecorderMime();
+  try {
+    mediaRecorder = mime
+      ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 })
+      : new MediaRecorder(stream, { videoBitsPerSecond: 6_000_000 });
+  } catch (err) {
+    alert('녹화 시작 실패: ' + err.message);
+    mediaRecorder = null;
+    return;
+  }
+  recChunks = [];
+  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recChunks.push(e.data); };
+  mediaRecorder.onstop = async () => {
+    const mime = mediaRecorder.mimeType || 'video/webm';
+    let blob = new Blob(recChunks, { type: mime });
+    const durationMs = Math.max(1, performance.now() - recStartedAt);
+    console.log('[record] mime=%s duration=%dms size=%dKB hasPatcher=%s',
+      mime, Math.round(durationMs), Math.round(blob.size / 1024),
+      typeof window.ysFixWebmDuration === 'function');
+    // WebM 컨테이너만 duration 패치 가능 — MP4는 라이브러리가 다룸이 다름.
+    // MediaRecorder가 만든 WebM은 SegmentInfo에 Duration이 없어 진행바/시킹이 안 됨.
+    if (blob.type.includes('webm') && typeof window.ysFixWebmDuration === 'function') {
+      try {
+        blob = await window.ysFixWebmDuration(blob, durationMs, { logger: false });
+        console.log('[record] WebM duration patched OK → %dKB', Math.round(blob.size / 1024));
+      } catch (err) {
+        console.warn('[record] WebM duration patch 실패:', err);
+      }
+    } else if (blob.type.includes('mp4')) {
+      console.warn('[record] MP4 컨테이너는 시킹/길이 메타데이터가 깨질 수 있음. pickRecorderMime을 WebM 우선으로 두세요.');
+    }
+    const ext = (blob.type.includes('mp4')) ? 'mp4' : 'webm';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `wargame_3d_${Date.now()}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    mediaRecorder = null;
+    recChunks = [];
+    recStartedAt = 0;
+    $btnRecord.classList.remove('recording');
+    $btnRecord.textContent = '⏺ Record';
+    // 재생 속도 복원
+    if (recOriginalSpeed != null) {
+      $speed.value = String(recOriginalSpeed);
+      speed = recOriginalSpeed;
+      recOriginalSpeed = null;
+    }
+    if (recStopAtEnd != null) {
+      cancelAnimationFrame(recStopAtEnd);
+      recStopAtEnd = null;
+    }
+  };
+
+  // 시나리오를 0부터 자동 재생
+  currentTime = 0;
+  rewindKillFeed(0);
+  detection?.clear();
+  resetIntel();
+  recOriginalSpeed = parseFloat($speed.value);
+  $speed.value = '1';   // 녹화 시 1× 속도 (실시간 캡처)
+  speed = 1;
+  setPlaying(true);
+  recStartedAt = performance.now();
+  mediaRecorder.start(200);   // 200ms 청크
+  $btnRecord.classList.add('recording');
+  $btnRecord.textContent = '⏹ Stop & Save';
+
+  // 시나리오 끝나면 자동 정지
+  function checkEnd() {
+    if (mediaRecorder && currentTime >= scenario.duration - 0.05) {
+      stopRecording();
+      return;
+    }
+    recStopAtEnd = requestAnimationFrame(checkEnd);
+  }
+  recStopAtEnd = requestAnimationFrame(checkEnd);
+}
+
+function stopRecording() {
+  if (!mediaRecorder) return;
+  try {
+    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  } catch (e) { /* ignore */ }
+}
+
+$btnRecord?.addEventListener('click', () => {
+  if (mediaRecorder) stopRecording();
+  else startRecording();
+});
+
 $scrub.addEventListener('input', e => {
   scrubbing = true;
   currentTime = (parseFloat(e.target.value) / 1000) * scenario.duration;
@@ -2085,23 +2233,22 @@ function tick() {
     for (const type of TYPE_ORDER) {
       const ref = refs.types[type];
       if (!ref) continue;
-      const op = stats.op[team][type]    | 0;
-      const ic = stats.incap[team][type] | 0;
+      const op = stats.op[team][type]    | 0;     // 사격 가능 (ALIVE + M_KILL)
+      const ic = stats.incap[team][type] | 0;     // 사격 불가 (F_KILL + MF_KILL) — 생존에서 차감
       const tot = totals[team][type];
-      const onField = op + ic;
-      ref.alive.textContent = String(onField);
-      const depleted = onField === 0 && tot > 0;
+      // "생존" = 사격 가능만 (incap은 사격 못 하니 제외) — 2D 패널과 동일 기준
+      ref.alive.textContent = String(op);
+      const depleted = op === 0 && tot > 0;
       ref.row.classList.toggle('depleted', depleted);
       ref.bar.classList.toggle('depleted', depleted);
       ref.fillOp.style.width    = `${(op / tot) * 100}%`;
-      ref.fillIncap.style.width = `${(ic / tot) * 100}%`;
+      ref.fillIncap.style.width = `${(ic / tot) * 100}%`;   // 시각적 참고용 (사격 불가 표시)
       teamOp += op;
       teamIncap += ic;
     }
-    const teamOnField = teamOp + teamIncap;
     const teamTot = teamTotal(team);
-    refs.teamAlive.textContent = String(teamOnField);
-    const lost = teamTot - teamOnField;
+    refs.teamAlive.textContent = String(teamOp);  // 생존 = 사격 가능
+    const lost = teamTot - teamOp;                // 잃음 = 사격 불가 + 전사
     refs.teamLost.textContent = lost > 0 ? `−${lost}` : '';
     refs.teamLost.classList.toggle('zero', lost === 0);
     refs.teamFillOp.style.width    = `${(teamOp    / teamTot) * 100}%`;

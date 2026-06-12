@@ -186,6 +186,17 @@ class Simulation:
             if unit.unit_type == UnitType.COMMAND_POST:
                 self.terrain.add_obstacle(unit.position, radius=2)  # ±2 셀 = 50m
 
+        # 종료 조건용 — 초기 전투 유닛 수 스냅샷 (이후 모든 유닛 시작 시 살아있으므로
+        # = "초기 사격 가능 수"와 동일). _check_termination이 현재 사격 가능 수와 비교.
+        self._initial_combat_count = {
+            Team.RED: sum(1 for u in self.units
+                          if u.team == Team.RED and u.unit_type in COMBAT_UNIT_TYPES),
+            Team.BLUE: sum(1 for u in self.units
+                           if u.team == Team.BLUE and u.unit_type in COMBAT_UNIT_TYPES),
+        }
+        self._defeat_combat_ratio = float(
+            self.config['simulation'].get('defeat_combat_ratio', 0.0))
+
         # agent_id 매핑 생성 (예: "blue_drn_1")
         self._build_agent_id_map()
 
@@ -369,25 +380,36 @@ class Simulation:
         Returns:
             "RED" / "BLUE" / "DRAW" — 종료 조건 충족
             None — 계속 진행
-        전투 가능 유닛(소총/대전차/전차/포병) 중 사격 가능한 유닛이 0인 팀은 패배.
+
+        한 팀의 (사격 가능 전투 유닛 / 초기 전투 유닛 수) 비율이
+        config의 defeat_combat_ratio (기본 0.30 = 30%) 미만이면 그 팀 패배.
+        ratio = 0.0 이면 전멸까지 가야 종료.
         """
-        red_combat = sum(
+        red_can_fire = sum(
             1 for u in self.units
             if u.team == Team.RED
             and u.unit_type in COMBAT_UNIT_TYPES
             and u.can_fire()
         )
-        blue_combat = sum(
+        blue_can_fire = sum(
             1 for u in self.units
             if u.team == Team.BLUE
             and u.unit_type in COMBAT_UNIT_TYPES
             and u.can_fire()
         )
-        if red_combat == 0 and blue_combat == 0:
+        red_init  = self._initial_combat_count[Team.RED]  or 1
+        blue_init = self._initial_combat_count[Team.BLUE] or 1
+        red_ratio  = red_can_fire  / red_init
+        blue_ratio = blue_can_fire / blue_init
+        thr = self._defeat_combat_ratio
+
+        red_defeated  = red_ratio  < thr
+        blue_defeated = blue_ratio < thr
+        if red_defeated and blue_defeated:
             return "DRAW"
-        if red_combat == 0:
+        if red_defeated:
             return "BLUE"
-        if blue_combat == 0:
+        if blue_defeated:
             return "RED"
         return None
 
