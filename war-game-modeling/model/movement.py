@@ -273,6 +273,11 @@ class Movement:
             unit.update_action(Action.STOP)
             return None
 
+        if unit.unit_type in (UnitType.RIFLE, UnitType.ANTI_TANK) and self.terrain.is_trench(unit.position):
+            unit.update_action(Action.STOP)
+            unit.update_objective(None)
+            return None
+
         # === 분대 추종원: 리더 위치 + 진형 오프셋으로 ===
         follower_target = self._squad_follower_target(unit, all_units)
         if follower_target is not None:

@@ -617,7 +617,7 @@ class Simulation:
             # 조기 종료 검사 — 한 팀의 전투 가능 유닛이 0이 되면 종료
             winner = self._check_termination()
             if winner is not None:
-                print(f"Simulation ended at t={self.current_time:.1f}s — winner: {winner}")
+                print(f"Simulation ended at t={self.current_time:.1f}s - winner: {winner}")
                 break
 
             # 시각화 업데이트
