@@ -55,5 +55,6 @@ war-game-modeling/results/terrain.dem
 war-game-modeling/results/terrain.json
 
 war-game-modeling/runs/
+war-game-modeling/batch_runs/
 war-game-modeling/results/money_3_3_old.csv
 war-game-modeling/results/simulation_3_3_old.csv
