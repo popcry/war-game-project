@@ -173,6 +173,11 @@ drone:
   pattern_change_time_s: 60.0       # 다음 격자로 옮기는 주기 (초)
   # TAI 중심 3×3 격자 순회 순서 (grid_x, grid_y; 1~3)
   pattern: [[1,1],[1,2],[1,3],[2,3],[2,2],[2,1],[3,1],[3,2],[3,3]]
+  recon_sector_count: 9             # Recon drones are auto-spread across TAI sectors.
+  recon_sector_spacing_m: 2500       # Distance between recon sector centers.
+  recon_entry_offset_m: 1000         # Staggered approach gate before each recon sector.
+  recon_orbit_radius_m: 300         # Recon drone orbit radius inside its assigned sector.
+  recon_deconflict_radius_m: 200    # Minimum preferred spacing between friendly recon drones.
 
 # --- 유닛별 능력치 ---
 # fire_interval: [a,b]→uniform(a,b),  [a,b,c]→triangular(low,high,mode),  null→사격 안 함

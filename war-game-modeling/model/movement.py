@@ -52,6 +52,23 @@ class Movement:
     # config 'pattern_change_time_s' (초) → tick으로 환산
     DRONE_OBJECTIVE_CHANGE_TIME = _DRONE_CFG['pattern_change_time_s'] / _SECONDS_PER_TICK
     DRONE_GRID_SIZE = _DRONE_CFG['grid_cell_size_m'] / PIXEL_TO_METER_SCALE
+    RECON_SECTOR_COUNT = max(1, int(_DRONE_CFG.get('recon_sector_count', len(DRONE_PATTERN) or 1)))
+    RECON_ORBIT_RADIUS = (
+        float(_DRONE_CFG.get('recon_orbit_radius_m', _DRONE_CFG['grid_cell_size_m']))
+        / PIXEL_TO_METER_SCALE
+    )
+    RECON_DECONFLICT_RADIUS = (
+        float(_DRONE_CFG.get('recon_deconflict_radius_m', 0.0))
+        / PIXEL_TO_METER_SCALE
+    )
+    RECON_SECTOR_SPACING = (
+        float(_DRONE_CFG.get('recon_sector_spacing_m', 0.0))
+        / PIXEL_TO_METER_SCALE
+    )
+    RECON_ENTRY_OFFSET = (
+        float(_DRONE_CFG.get('recon_entry_offset_m', 0.0))
+        / PIXEL_TO_METER_SCALE
+    )
 
     def __init__(self):
         self.terrain = Terrain()
@@ -64,6 +81,131 @@ class Movement:
         if not self.DRONE_PATTERN:
             return 0
         return unit.id % len(self.DRONE_PATTERN)
+
+    def _clamp_map_point(self, point: Tuple[float, float]) -> Tuple[float, float]:
+        return (
+            max(0.0, min(float(MAP_WIDTH), point[0])),
+            max(0.0, min(float(MAP_HEIGHT), point[1])),
+        )
+
+    def _drone_slot(self, unit: Unit, slot_count: int) -> int:
+        if slot_count <= 1:
+            return 0
+        return unit.id % slot_count
+
+    def _recon_slot(self, unit: Unit, all_units: Optional[List[Unit]], slot_count: int) -> int:
+        if slot_count <= 1:
+            return 0
+        if all_units:
+            recon_units = sorted(
+                (
+                    other for other in all_units
+                    if other.team == unit.team and other.unit_type == UnitType.DRONE
+                ),
+                key=lambda other: (other.squad_id or "", other.id),
+            )
+            for idx, other in enumerate(recon_units):
+                if other.id == unit.id:
+                    return idx % slot_count
+        return self._drone_slot(unit, slot_count)
+
+    def _recon_sector_spacing(self) -> float:
+        if self.RECON_SECTOR_SPACING > 0:
+            return self.RECON_SECTOR_SPACING
+        return max(
+            self.DRONE_GRID_SIZE,
+            self.RECON_ORBIT_RADIUS * 2.0,
+            self.RECON_DECONFLICT_RADIUS * 2.0,
+        )
+
+    def _recon_sector_center(self, unit: Unit, command: Command,
+                             all_units: Optional[List[Unit]] = None) -> Optional[Tuple[float, float]]:
+        if not command.TAI:
+            return None
+
+        sector_index = self._recon_slot(unit, all_units, self.RECON_SECTOR_COUNT)
+        sector_spacing = self._recon_sector_spacing()
+        if sector_index < len(self.DRONE_PATTERN):
+            grid_x, grid_y = self.DRONE_PATTERN[sector_index]
+            return self._clamp_map_point((
+                command.TAI[0] + (grid_x - 2) * sector_spacing,
+                command.TAI[1] + (grid_y - 2) * sector_spacing,
+            ))
+
+        ring_index = sector_index - len(self.DRONE_PATTERN)
+        ring_count = max(1, self.RECON_SECTOR_COUNT - len(self.DRONE_PATTERN))
+        angle = 2 * math.pi * ring_index / ring_count
+        radius = sector_spacing * 1.5
+        return self._clamp_map_point((
+            command.TAI[0] + math.cos(angle) * radius,
+            command.TAI[1] + math.sin(angle) * radius,
+        ))
+
+    def _apply_drone_deconfliction(self, unit: Unit, objective: Tuple[float, float],
+                                   all_units: Optional[List[Unit]]) -> Tuple[float, float]:
+        if not all_units or self.RECON_DECONFLICT_RADIUS <= 0:
+            return self._clamp_map_point(objective)
+
+        push_x = 0.0
+        push_y = 0.0
+        for other in all_units:
+            if other.id == unit.id or other.team != unit.team:
+                continue
+            if other.unit_type != UnitType.DRONE:
+                continue
+            if other.status not in (Status.ALIVE, Status.M_KILL):
+                continue
+
+            dx = objective[0] - other.position[0]
+            dy = objective[1] - other.position[1]
+            dist = math.hypot(dx, dy)
+            if dist >= self.RECON_DECONFLICT_RADIUS:
+                continue
+            if dist < 1e-6:
+                angle = (unit.id * 2.399963229728653) % (2 * math.pi)
+                dx = math.cos(angle)
+                dy = math.sin(angle)
+                dist = 1.0
+            strength = (self.RECON_DECONFLICT_RADIUS - dist) / self.RECON_DECONFLICT_RADIUS
+            push_x += (dx / dist) * strength
+            push_y += (dy / dist) * strength
+
+        if push_x == 0.0 and push_y == 0.0:
+            return self._clamp_map_point(objective)
+
+        push_len = math.hypot(push_x, push_y)
+        return self._clamp_map_point((
+            objective[0] + (push_x / push_len) * self.RECON_DECONFLICT_RADIUS * 0.5,
+            objective[1] + (push_y / push_len) * self.RECON_DECONFLICT_RADIUS * 0.5,
+        ))
+
+    def _recon_entry_objective(self, unit: Unit, command: Command, sector_center: Tuple[float, float],
+                               slot: int) -> Optional[Tuple[float, float]]:
+        if self.RECON_ENTRY_OFFSET <= 0:
+            return None
+
+        distance_to_sector = calculate_point_distance(unit.position, sector_center)
+        if distance_to_sector <= self.RECON_ENTRY_OFFSET * 1.5:
+            return None
+
+        radial_x = sector_center[0] - command.TAI[0]
+        radial_y = sector_center[1] - command.TAI[1]
+        radial_len = math.hypot(radial_x, radial_y)
+        if radial_len < 1e-6:
+            angle = 2 * math.pi * (slot / max(1, self.RECON_SECTOR_COUNT))
+            radial_x = math.cos(angle)
+            radial_y = math.sin(angle)
+            radial_len = 1.0
+
+        lane_phase = ((slot % 3) - 1) * self.RECON_ENTRY_OFFSET * 0.35
+        tangent_x = -radial_y / radial_len
+        tangent_y = radial_x / radial_len
+        outward_x = radial_x / radial_len
+        outward_y = radial_y / radial_len
+        return self._clamp_map_point((
+            sector_center[0] + outward_x * self.RECON_ENTRY_OFFSET + tangent_x * lane_phase,
+            sector_center[1] + outward_y * self.RECON_ENTRY_OFFSET + tangent_y * lane_phase,
+        ))
 
     # 차단 시 우회: 좁은 각부터 넓은 각까지, 양쪽으로 — 벽을 따라 옆으로 미끄러지듯 전진
     _BYPASS_ANGLES = [math.radians(a) for a in
@@ -142,6 +284,29 @@ class Movement:
             max(0.0, min(float(MAP_HEIGHT), y)),
         )
 
+    def calculate_recon_patrol_objective(self, unit: Unit, command: Command, current_time: float,
+                                         all_units: Optional[List[Unit]]) -> Optional[Tuple[float, float]]:
+        sector_center = self._recon_sector_center(unit, command, all_units)
+        if sector_center is None:
+            return None
+
+        slot = self._recon_slot(unit, all_units, max(1, self.RECON_SECTOR_COUNT))
+        entry_objective = self._recon_entry_objective(unit, command, sector_center, slot)
+        if entry_objective is not None:
+            return self._apply_drone_deconfliction(unit, entry_objective, all_units)
+
+        phase = ((unit.id % 17) / 17.0) + ((slot % 3) / 9.0)
+        direction = -1.0 if (unit.id + (0 if unit.team == Team.BLUE else 1)) % 2 else 1.0
+        orbit_period = max(4.0, self.DRONE_OBJECTIVE_CHANGE_TIME * 8.0)
+        radius_scale = 0.75 + 0.15 * (slot % 3)
+        radius = self.RECON_ORBIT_RADIUS * radius_scale
+        angle = direction * 2 * math.pi * ((current_time / orbit_period) + phase)
+        objective = (
+            sector_center[0] + math.cos(angle) * radius,
+            sector_center[1] + math.sin(angle) * radius,
+        )
+        return self._apply_drone_deconfliction(unit, objective, all_units)
+
     def get_unit_speed(self, unit: Unit, position: Tuple[float, float]) -> float:
         """유닛의 이동 속도 반환 (지형 영향 포함)"""
         speed_override = _get_platform_override(unit.team, unit.unit_type, 'speed_kmh')
@@ -200,32 +365,29 @@ class Movement:
 
     def get_objective(self, unit: Unit, command: Command, current_time: float,
                       all_units: Optional[List[Unit]] = None) -> Optional[Tuple[float, float]]:
-        """유닛 타입에 따른 목적지 반환
+        """Return a movement objective by unit role.
 
-        SELF_DEST_DRONE: 탐지된 전차/포병이 있으면 그 위치로 직접 비행(자폭 접근),
-                         없으면 기존 TAI 3×3 정찰 패턴.
+        DRONE patrols an automatically assigned recon sector around TAI.
+        SELF_DEST_DRONE keeps the legacy TAI pattern until it detects a high-value target.
         """
-        if unit.unit_type == UnitType.SELF_DEST_DRONE and all_units is not None:
-            HIGH_VALUE = {UnitType.TANK, UnitType.ARTILLERY}
-            best_pos = None
-            best_dist = float('inf')
-            for tid in unit.target_list:
-                t = next((u for u in all_units if u.id == tid), None)
-                if t and t.unit_type in HIGH_VALUE and t.status in [Status.ALIVE, Status.M_KILL, Status.MINOR]:
-                    d = calculate_point_distance(unit.position, t.position)
-                    if d < best_dist:
-                        best_dist = d
-                        best_pos = t.position
-            if best_pos is not None:
-                return best_pos
+        if unit.unit_type == UnitType.SELF_DEST_DRONE:
+            if all_units is not None:
+                HIGH_VALUE = {UnitType.TANK, UnitType.ARTILLERY}
+                best_pos = None
+                best_dist = float('inf')
+                for tid in unit.target_list:
+                    t = next((u for u in all_units if u.id == tid), None)
+                    if t and t.unit_type in HIGH_VALUE and t.status in [Status.ALIVE, Status.M_KILL, Status.MINOR]:
+                        d = calculate_point_distance(unit.position, t.position)
+                        if d < best_dist:
+                            best_dist = d
+                            best_pos = t.position
+                if best_pos is not None:
+                    return best_pos
             return self.calculate_drone_objective(unit, command, current_time)
 
         if unit.unit_type == UnitType.DRONE:
-            if all_units is not None:
-                orbit_objective = self.calculate_drone_orbit_objective(unit, current_time, all_units)
-                if orbit_objective is not None:
-                    return orbit_objective
-            return self.calculate_drone_objective(unit, command, current_time)
+            return self.calculate_recon_patrol_objective(unit, command, current_time, all_units)
         elif unit.unit_type in [UnitType.RIFLE, UnitType.TANK, UnitType.ANTI_TANK, UnitType.COMMAND_POST]:
             if command.maneuver_objective and len(command.maneuver_objective) > 0:
                 # maneuver_objective는 리스트이므로 첫 번째 목표 지점을 사용
@@ -249,6 +411,8 @@ class Movement:
     def _squad_follower_target(self, unit: Unit, all_units: List[Unit]) -> Optional[Tuple[float, float]]:
         """진형 추종 유닛(non-leader)의 목표 위치 = 리더 위치 + 회전된 진형 오프셋.
         리더가 없거나(squad 단독) 진형 오프셋이 없으면 None."""
+        if unit.unit_type == UnitType.DRONE:
+            return None
         leader = self._find_alive_leader(unit, all_units)
         if leader is None or unit.formation_offset is None:
             return None
@@ -334,7 +498,7 @@ class Movement:
                 self.drone_last_objective_change[unit.id] = current_time
                 
                 # 새로운 목표 지점 계산
-                new_objective = self.calculate_drone_objective(unit, command, current_time)
+                new_objective = self.get_objective(unit, command, current_time, all_units)
                 if new_objective:
                     unit.update_objective(new_objective)
                     # 새로운 목표 지점으로의 이동 이벤트 생성
