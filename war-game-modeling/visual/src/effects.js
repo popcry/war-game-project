@@ -492,13 +492,13 @@ const WRECK_SPECS = {
   infantry:  { flameCount: 0, smokeCount: 0, intensity: 0.0,  extent: 0.4, tip: true  },
 };
 
-// 사망 후 잔해/링 페이드 — local = t-deathTime (단위: scenario tick = 1분)
-// [0..HOLD]              : 100% (사망 직후 일정 시간 풀 가시 — 어디서 죽었는지 보이게)
+// 사망 후 잔해/링 페이드 — local = t-deathTime (단위: scenario tick = 1분, 기본 speed=1.0에서 ≈ 실제 1초)
+// [0..HOLD]              : 100% (사망 직후 일정 시간 풀 가시 — 검정 잔해 색 그대로 유지)
 // [HOLD..HOLD+FADE]      : 선형 페이드 1 → FLOOR
 // [HOLD+FADE..]          : FLOOR 유지 (완전히 안 사라짐 — 흐릿하게 그대로 남음)
-export const DEATH_FADE_HOLD = 5.0;     // 5틱(5분)간 풀 가시
-export const DEATH_FADE_DURATION = 2.0; // 이후 2틱 동안 점차 흐려짐
-export const DEATH_FADE_FLOOR = 0.20;   // 최종 투명도 (아예 사라지진 않음)
+export const DEATH_FADE_HOLD = 2.0;     // 2초(speed=1.0)간 검정색 풀 가시
+export const DEATH_FADE_DURATION = 0.5; // 이후 0.5초 동안 빠르게 흐려짐
+export const DEATH_FADE_FLOOR = 0.40;   // 최종 불투명도 40% (= 60% 투명, 아예 사라지진 않음)
 export function deathFadeFactor(local) {
   if (local < 0) return 0;
   if (local <= DEATH_FADE_HOLD) return 1;

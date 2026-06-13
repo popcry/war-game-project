@@ -512,12 +512,8 @@ function makeArtillery(team) {
     track:   mat(0x141414, { roughness: 0.95 }),
     wheel:   mat(0x1d1d1d, { roughness: 0.85 }),
     metal:   mat(0x2c2c2c, { metalness: 0.45, roughness: 0.5 }),
-    // 자주포 포신 — 차량 본체와 구분되는 식별색 (양 팀 공통)
-    // 진한 오렌지 + 약한 자체발광으로 그늘에서도 잘 보임
-    barrel:  mat(0xff7a1a, {
-      metalness: 0.55, roughness: 0.4,
-      emissive: 0x4a1f00, emissiveIntensity: 0.35,
-    }),
+    // 자주포 포신 — 양 팀 공통 어두운 회색 (자체발광 없음)
+    barrel:  mat(0x333333, { metalness: 0.55, roughness: 0.4 }),
     dark:    mat(0x111111),
     light:   mat(0xfff0c8, { emissive: 0x554020, emissiveIntensity: 0.25, roughness: 0.3 }),
   };
