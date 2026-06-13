@@ -264,7 +264,7 @@ platform_overrides:
       fire_cost: 500
     ANTI_TANK:
       speed_kmh: 1.5      # RED AT(3)의 ½
-      unit_value: 450000000
+      unit_value: 500000
       fire_cost: 130000000
     TANK:
       speed_kmh: 5        # RED 전차(10)의 ½
@@ -454,9 +454,9 @@ money:
     SERIOUS: 0.5
     CRITICAL: 0.8
     FATAL: 1.0
-    M_KILL: 0.4
-    F_KILL: 0.4
-    MF_KILL: 0.7
+    M_KILL: 0.7
+    F_KILL: 0.7
+    MF_KILL: 0.9
     K_KILL: 1.0
 
 # ============================================================
