@@ -6,7 +6,7 @@ import { loadMoneyFromCsv, sampleMoney } from './moneyLoader.js';
 import { CinematicDirector, loadCameraSchedule } from './cinematic.js';
 import { EffectsManager, attachDamageEffect, createStatusRing, deathFadeFactor } from './effects.js';
 import { DetectionOverlay } from './detection.js';
-import { openBattleGraph } from './graphWindow.js';
+import { openBattleGraph } from './graphWindow.js?v=white-graph-20260614';
 
 const TEAM_PRIMARY_HEX = { blue: 0x4ea0ff, red: 0xff5b5b };
 const INCAP_RING_HEX   = 0xffd166;

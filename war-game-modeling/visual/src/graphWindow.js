@@ -15,14 +15,14 @@
 //   }
 // 외부 라이브러리 없이 팝업 문서에 자체 완결된 캔버스를 그린다.
 
-const BG = '#0b1116';
-const PANEL = '#11181f';
-const TEXT = '#e6edf3';
-const MUTED = '#8b9aa8';
-const GRID = 'rgba(255,255,255,0.08)';
+const BG = '#ffffff';
+const PANEL = '#ffffff';
+const TEXT = '#17202a';
+const MUTED = '#667085';
+const GRID = 'rgba(0,0,0,0.10)';
 
 export function openBattleGraph(data) {
-  const win = window.open('', 'battleGraph', 'width=960,height=860');
+  const win = window.open('', 'battleGraphWhite20260614', 'width=960,height=860');
   if (!win) {
     alert('팝업이 차단되었습니다. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.');
     return;
